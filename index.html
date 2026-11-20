@@ -120,7 +120,7 @@ input:focus,textarea:focus{border-color:var(--accent)}
   <button id="vHeart">💗 하트</button><button id="vNote">✏️ 방명록</button><button id="vHome">🏠 집으로</button></div>
 <div class="decobar" id="decobar"><button id="dRot">🔄 돌리기</button><button id="dBag">🎒 가방</button><button id="dDone">✅ 끝내기</button></div>
 <button id="action"></button>
-<div class="hint" id="hint">가고 싶은 곳을 눌러요 · 오븐·카운터를 누르면 바로 써요</div>
+<div class="hint" id="hint">가고 싶은 곳을 눌러요 · 오븐·텃밭·집을 누르면 바로 써요</div>
 <div id="toast"></div>
 
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
@@ -183,7 +183,31 @@ const ITEMS = {
   fountain:{name:'분수',      em:'⛲', price:300, lv:4, r:1.5},
   arch:    {name:'꽃 아치',   em:'💐', price:200, lv:5},
   windmill:{name:'작은 풍차', em:'🎐', price:400, lv:6, r:1.2},
+  // 집 안 가구
+  bed:     {name:'폭신 침대', em:'🛏️', price:120, lv:1, r:.9,  room:true},
+  rug:     {name:'동그란 러그',em:'🟣', price:40,  lv:1, room:true},
+  rtable:  {name:'둥근 탁자', em:'🍽️', price:60,  lv:1, r:.55, room:true},
+  chair:   {name:'나무 의자', em:'🪑', price:35,  lv:1, r:.35, room:true},
+  shelf:   {name:'책장',      em:'📚', price:90,  lv:2, r:.6,  room:true},
+  sofa:    {name:'소파',      em:'🛋️', price:150, lv:2, r:.8,  room:true},
+  standlamp:{name:'스탠드',   em:'💡', price:70,  lv:2, r:.25, room:true},
+  clock:   {name:'괘종시계',  em:'🕰️', price:110, lv:3, r:.35, room:true},
+  plant:   {name:'큰 화분',   em:'🌿', price:50,  lv:1, r:.35, room:true},
 };
+const CROPS = {
+  wheat:  {name:'밀',       em:'🌾', seed:5,  grow:120, lv:1, hint:'굽는 빵에 쓰면 보너스'},
+  berry:  {name:'딸기',     em:'🍓', seed:10, grow:240, lv:1, hint:'딸기 토핑에 쓰면 보너스'},
+  blue:   {name:'블루베리', em:'🫐', seed:15, grow:360, lv:3, hint:'블루베리 토핑에 쓰면 보너스'},
+  pumpkin:{name:'호박',     em:'🎃', seed:20, grow:600, lv:3, hint:'파이에 쓰면 보너스'},
+};
+const MYHOUSE = {x:-11, z:6};
+const GARDEN = {x:11, z:5};
+const ROOM = {x:200, z:0};
+const HOUSE_COST = {2:{coins:400, lv:2}, 3:{coins:1200, lv:4}};
+const WALLS = [0xfff4e2,0xffe3e3,0xe6f3ff,0xe9f7e1,0xfff0c9,0xf0e6ff];
+const ROOFS = [0x7aa7d9,0xe67e5a,0x8bc47a,0xb98ad9,0xf2b84b,0x8a6a55];
+const plotPos = i => [GARDEN.x + (i%3-1)*1.45, GARDEN.z + (Math.floor(i/3)-1)*1.45];
+const roomHalf = d => 2.6 + (d.house?.stage||1)*.8;
 const HOUSE_SPOTS = [[-15,-11],[15,-11],[-18,4],[18,4],[-12,15],[12,15],[-20,-3],[20,-3]];
 const WORLD_R = 23;
 const BAKERY_BOX = {minX:-6.2,maxX:6.2,minZ:-13,maxZ:-6.6};
@@ -191,7 +215,9 @@ const BAKERY_BOX = {minX:-6.2,maxX:6.2,minZ:-13,maxZ:-6.6};
 function freshSave(){
   return {v:1, name:'', species:'rabbit', color:0xf6c8d6, coins:60, xp:0, level:1,
     items:{flowerR:3, flowerY:3}, placed:[], friends:{}, residents:[], gifted:{},
-    stats:{served:0, perfect:0}, updatedAt:0};
+    stats:{served:0, perfect:0}, updatedAt:0,
+    house:{stage:1, wall:0xfff4e2, roof:0x7aa7d9}, room:[{id:'bed',x:-1.6,z:-1.6,r:0},{id:'rug',x:0,z:0.4,r:0}],
+    garden:[{},{},{},{},{},{}], pantry:{}};
 }
 const xpNeed = lv => 25 + lv*20;
 
@@ -383,7 +409,54 @@ function makeItem(id){
     case 'windmill': g.add(mesh(G.cyl(.6,.9,2.6,8), M(0xfff3df),0,1.3,0)); g.add(mesh(G.cone(.85,.9,8), M(0xd4664e),0,3.05,0));
       { const hub = new THREE.Group(); hub.position.set(0,2.4,.85); hub.userData.spin2=true;
         for (let i=0;i<4;i++){ const bl = mesh(G.box(.28,1.4,.04), M(0xffffff),0,.7,0); const p = new THREE.Group(); p.rotation.z = i*Math.PI/2; p.add(bl); hub.add(p);} g.add(hub);} break;
+    case 'bed': g.add(mesh(G.box(1.3,.35,2.1), M(0xb98353),0,.18,0)); g.add(mesh(G.box(1.2,.2,2), M(0xffffff),0,.45,0));
+      g.add(mesh(G.box(1.24,.12,1.3), M(0xf6a8b8),0,.58,.35)); g.add(mesh(G.box(.8,.18,.45), M(0xfffaf0),0,.62,-.7)); g.add(mesh(G.box(1.3,.8,.12), M(0xb98353),0,.4,-1.05)); break;
+    case 'rug': { const r = mesh(G.cyl(1.1,1.1,.03,28), M(0xc9a8e8),0,.015,0,false); g.add(r); g.add(mesh(G.cyl(.7,.7,.035,28), M(0xf3e6ff),0,.02,0,false)); break; }
+    case 'rtable': g.add(mesh(G.cyl(.6,.6,.08,18), M(0xd9a46a),0,.72,0)); g.add(mesh(G.cyl(.08,.1,.7,8), M(0xb98353),0,.36,0)); g.add(mesh(G.cyl(.3,.35,.05,12), M(0xb98353),0,.03,0));
+      g.add(mesh(G.cyl(.15,.12,.12,10), M(0xffffff),.15,.82,.1)); break;
+    case 'chair': g.add(mesh(G.box(.55,.08,.55), M(0xd9a46a),0,.45,0)); g.add(mesh(G.box(.55,.6,.07), M(0xd9a46a),0,.78,-.24));
+      for (const [x,z] of [[-.22,-.22],[.22,-.22],[-.22,.22],[.22,.22]]) g.add(mesh(G.box(.06,.45,.06), M(0xb98353),x,.22,z)); break;
+    case 'shelf': g.add(mesh(G.box(1.4,1.8,.45), M(0xb98353),0,.9,0));
+      for (let r=0;r<3;r++) for (let i=0;i<5;i++) g.add(mesh(G.box(.18,.4,.3), M([0xf28a8a,0x7aa7d9,0xf2d27a,0x8bc47a,0xb98ad9][(i+r)%5]),-.48+i*.24,.42+r*.55,.1,false)); break;
+    case 'sofa': g.add(mesh(G.box(1.9,.45,.85), M(0x8fb8e0),0,.3,0)); g.add(mesh(G.box(1.9,.6,.25), M(0x7aa7d9),0,.75,-.32));
+      for (const x of [-.85,.85]) g.add(mesh(G.box(.25,.4,.85), M(0x7aa7d9),x,.6,0)); for (const x of [-.45,.45]) g.add(mesh(G.box(.8,.12,.6), M(0xa9c9ea),x,.58,.08)); break;
+    case 'standlamp': g.add(mesh(G.cyl(.25,.28,.06,12), M(0x6b6b6b),0,.03,0)); g.add(mesh(G.cyl(.04,.04,1.5,6), M(0x6b6b6b),0,.78,0));
+      { const sh = mesh(G.cyl(.22,.35,.4,12,1,true), M(0xfff1c9,{emissive:0xffd36b, emissiveIntensity:.4, side:THREE.DoubleSide}),0,1.55,0); sh.userData.glow=true; g.add(sh); } break;
+    case 'clock': g.add(mesh(G.box(.6,1.9,.4), M(0x8a5a3a),0,.95,0)); g.add(mesh(G.cyl(.22,.22,.04,16), M(0xfff6e0),0,1.5,.21).rotateX(Math.PI/2));
+      g.add(mesh(G.box(.04,.15,.02), M(0x333333),0,1.55,.24,false)); { const pend = mesh(G.sph(.08,8,6), M(0xffd54f),0,.7,.2,false); pend.userData.swing=true; g.add(pend);} break;
+    case 'plant': g.add(mesh(G.cyl(.25,.2,.4,10), M(0xe8e1d6),0,.2,0)); for (let i=0;i<5;i++){ const l = mesh(G.sph(.22,8,6), M(0x5aa36a), Math.cos(i*1.3)*.15,.7+i*.08,Math.sin(i*1.3)*.15); l.scale.set(.6,1.4,.6); l.rotation.z = Math.cos(i)*.5; g.add(l);} break;
   }
+  return g;
+}
+function makeMyHouse(h){
+  const g = new THREE.Group(), st = h.stage||1, wall = M(h.wall), roof = M(h.roof);
+  const W = [0,2.6,3.4,3.8][st], D = [0,2.4,3,3.2][st], H = [0,1.7,2.1,2.2][st];
+  g.add(mesh(G.box(W,H,D), wall,0,H/2,0));
+  g.add(mesh(G.box(W+.2,.18,D+.2), M(0xb98353),0,.09,0));
+  const r = mesh(G.cone(W*.8,1.3+st*.2,4), roof,0,H+(1.3+st*.2)/2,0); r.rotation.y=Math.PI/4; r.scale.set(1,1,D/W); g.add(r);
+  g.add(mesh(G.box(.8,1.25,.1), M(shade(h.roof,-.15)),0,.62,D/2+.01));
+  g.add(mesh(G.sph(.06,8,6), M(0xffd54f),.25,.62,D/2+.08,false));
+  for (const x of [-W*.3, W*.3]){ const w = mesh(G.box(.55,.55,.08), M(0xbfe6ff,{emissive:0xffd77a, emissiveIntensity:0}),x,H*.62,D/2+.01,false); w.userData.window=true; g.add(w);
+    if (st>=2){ g.add(mesh(G.box(.7,.15,.25), M(0xb98353),x,H*.62-.38,D/2+.12)); for (let i=0;i<3;i++) g.add(mesh(G.sph(.08,6,4), M([0xf26b7a,0xffd54f,0xffffff][i]),x-.2+i*.2,H*.62-.27,D/2+.14,false)); } }
+  if (st>=2) g.add(mesh(G.box(.45,1.1,.45), M(0xc96a4a), W*.28, H+.9, -D*.15));
+  if (st>=3){ // 현관 지붕과 기둥
+    g.add(mesh(G.box(1.8,.12,1.1), roof,0,1.75,D/2+.55)); for (const x of [-.8,.8]) g.add(mesh(G.cyl(.06,.06,1.7,6), M(0xffffff),x,.85,D/2+1));
+    const dorm = mesh(G.box(1,.8,.8), wall,0,H+.6,D*.25); g.add(dorm); const dr = mesh(G.cone(.85,.6,4), roof,0,H+1.3,D*.25); dr.rotation.y=Math.PI/4; g.add(dr);
+    const dw = mesh(G.box(.4,.4,.05), M(0xbfe6ff,{emissive:0xffd77a, emissiveIntensity:0}),0,H+.6,D*.25+.41,false); dw.userData.window=true; g.add(dw); }
+  // 문패
+  g.add(mesh(G.box(.5,.25,.05), M(0xfff6e0), -.75, 1.05, D/2+.03, false));
+  return g;
+}
+function makeCrop(c, prog){
+  const g = new THREE.Group(), green = M(0x6fbf5a);
+  if (prog < .5){ for (const x of [-.08,.08]){ const l = mesh(G.sph(.08,6,4), green, x,.16,0,false); l.scale.set(1,.5,1.6); l.rotation.y = x*8; g.add(l);} g.add(mesh(G.cyl(.015,.015,.12,4), green,0,.1,0,false)); return g; }
+  const ripe = prog >= 1;
+  if (c==='wheat'){ for (let i=0;i<6;i++){ const a=i*1.05, x=Math.cos(a)*.2, z=Math.sin(a)*.2; g.add(mesh(G.cyl(.02,.02,ripe?.6:.4,4), M(ripe?0xd9b85a:0x8fcf6a),x,ripe?.3:.2,z,false));
+      if (ripe) g.add(mesh(G.cyl(.05,.035,.2,6), M(0xf2cf6b),x,.68,z)); } }
+  else if (c==='pumpkin'){ for (let i=0;i<3;i++){ const l = mesh(G.sph(.14,8,6), green, Math.cos(i*2)*.25,.12,Math.sin(i*2)*.25,false); l.scale.y=.4; g.add(l);} if (ripe){ const p = mesh(G.sph(.3,12,8), M(0xf39a3a),0,.24,0); p.scale.y=.75; g.add(p); g.add(mesh(G.cyl(.03,.04,.12,6), M(0x5b8a3a),0,.48,0)); } else g.add(mesh(G.sph(.12,8,6), M(0x9fd17a),0,.12,0)); }
+  else { const bush = mesh(G.sph(ripe?.32:.24,10,8), green,0,ripe?.3:.22,0); bush.scale.y=.85; g.add(bush);
+    if (ripe) for (let i=0;i<7;i++){ const a=i*.9; g.add(mesh(G.sph(c==='berry'?.07:.06,6,5), M(c==='berry'?0xf0524f:0x4b5bc4), Math.cos(a)*.28,.28+Math.sin(i*1.7)*.12,Math.sin(a)*.28,false)); } }
+  if (ripe) g.userData.ripe = true;
   return g;
 }
 function makeHouse(color, roof){
@@ -465,6 +538,59 @@ const decoGroup = new THREE.Group(); world.add(decoGroup);
 const housesGroup = new THREE.Group(); world.add(housesGroup);
 const npcs = []; // residents & customers {obj, ...}
 let decoColliders = [];
+const myHouseGroup = new THREE.Group(); myHouseGroup.position.set(MYHOUSE.x,0,MYHOUSE.z); world.add(myHouseGroup);
+const gardenGroup = new THREE.Group(); world.add(gardenGroup);
+const roomGroup = new THREE.Group(); roomGroup.position.set(ROOM.x,0,ROOM.z); world.add(roomGroup);
+const roomDecoGroup = new THREE.Group(); roomGroup.add(roomDecoGroup);
+let roomColliders = [];
+let area = 'out'; // out | in
+const plots = []; // 텃밭 칸 Group
+for (let i=0;i<9;i++){ const g = new THREE.Group(); const [x,z] = plotPos(i); g.position.set(x,0,z); gardenGroup.add(g); plots.push(g); }
+{ // 텃밭 울타리와 팻말
+  const fx = GARDEN.x, fz = GARDEN.z, h = 2.3;
+  for (const [x,z,ry,len] of [[fx,fz-h,0,4.6],[fx-h,fz,Math.PI/2,4.6],[fx+h,fz,Math.PI/2,4.6]]){
+    const f = new THREE.Group(); f.position.set(x,0,z); f.rotation.y = ry; gardenGroup.add(f);
+    f.add(mesh(G.box(len,.08,.06), M(0xcf9a66),0,.38,0)); f.add(mesh(G.box(len,.08,.06), M(0xcf9a66),0,.18,0));
+    for (let i=0;i<5;i++) f.add(mesh(G.box(.09,.5,.09), M(0xb98353),-len/2+i*len/4,.25,0)); }
+  const sign = new THREE.Group(); sign.position.set(fx-1.9, 0, fz+2.6); gardenGroup.add(sign);
+  sign.add(mesh(G.cyl(.05,.05,.8,6), M(0x8b5e3c),0,.4,0)); sign.add(mesh(G.box(.8,.4,.06), M(0xfff1dc),0,.85,0)); sign.add(mesh(G.sph(.1,8,6), M(0xf0524f),-.15,.85,.05,false)); sign.add(mesh(G.cone(.07,.15,6), M(0x6fbf5a),.18,.86,.05,false));
+}
+{ // 방 바닥과 벽 (집 안)
+  const back = mesh(new THREE.PlaneGeometry(60,60), M(0xf3e2c4),0,-.06,0,false); back.rotation.x = -Math.PI/2; roomGroup.add(back);
+}
+let roomShell = null;
+function buildRoomShell(d){
+  if (roomShell) roomGroup.remove(roomShell);
+  const g = new THREE.Group(), hs = roomHalf(d), wallM = M(d.house.wall), trim = M(shade(d.house.roof,-.05));
+  const floor = mesh(G.box(hs*2,.1,hs*2), M(0xd9a46a),0,-.05,0,false); floor.receiveShadow = true; g.add(floor);
+  for (let i=0;i<Math.round(hs*2/0.9);i++) g.add(mesh(G.box(.02,.005,hs*2), M(0xc48f58),-hs+.45+i*.9,.001,0,false));
+  g.add(mesh(G.box(hs*2+.4,3,.2), wallM,0,1.5,-hs-.1)); g.add(mesh(G.box(.2,3,hs*2), wallM,-hs-.1,1.5,0)); g.add(mesh(G.box(.2,3,hs*2), wallM,hs+.1,1.5,0));
+  g.add(mesh(G.box(hs*2+.4,.25,.24), trim,0,.12,-hs-.1,false)); 
+  const win = mesh(G.box(1.6,1.1,.05), M(0xbfe6ff,{emissive:0xffd77a, emissiveIntensity:0}),hs*.4,1.8,-hs+.01,false); win.userData.window = true; g.add(win);
+  g.add(mesh(G.box(1.75,.1,.12), trim,hs*.4,1.22,-hs+.04,false));
+  g.add(mesh(G.box(1.6,.06,.7), M(0xf6a8b8),0,.03,hs-.2,false)); // 현관 매트
+  const lamp = new THREE.PointLight(0xffe2b0, 1.2, hs*4, 1.5); lamp.position.set(0,2.6,0); g.add(lamp);
+  roomShell = g; roomGroup.add(g);
+}
+function buildRoom(d){
+  buildRoomShell(d);
+  roomDecoGroup.clear(); roomColliders = [];
+  d.room.forEach(p => { const o = makeItem(p.id); o.position.set(p.x,0,p.z); o.rotation.y = (p.r||0)*Math.PI/2; roomDecoGroup.add(o);
+    if (ITEMS[p.id]?.r) roomColliders.push({x:ROOM.x+p.x, z:ROOM.z+p.z, r:ITEMS[p.id].r}); });
+}
+function buildMyHouse(d){ myHouseGroup.clear(); myHouseGroup.add(makeMyHouse(d.house)); }
+const cropProg = pl => !pl.crop ? -1 : !pl.watered ? 0 : Math.min(1, (Date.now()-pl.watered)/1000/CROPS[pl.crop].grow);
+let gardenSig = '';
+function buildGarden(d, force){
+  const sig = d.garden.map(pl => pl.crop ? pl.crop + (pl.watered?1:0) + Math.floor(cropProg(pl)*2) : '-').join(',') + (d.level>=3?9:6);
+  if (sig === gardenSig && !force) return; gardenSig = sig;
+  const n = d.garden.length;
+  plots.forEach((g,i) => { g.clear(); g.visible = i < n;
+    if (i >= n) return; const pl = d.garden[i];
+    g.add(mesh(G.box(1.25,.12,1.25), M(pl.crop && pl.watered && cropProg(pl)<1 ? 0x6b4a32 : 0x9a6b47),0,.06,0,false));
+    for (let k=0;k<3;k++) g.add(mesh(G.box(1.1,.03,.12), M(0x87593a),0,.13,-.4+k*.4,false));
+    if (pl.crop){ const c = makeCrop(pl.crop, cropProg(pl)); c.position.y = .12; c.scale.setScalar(1.35); g.add(c); } });
+}
 
 let houseColliders = [];
 function buildDeco(data){
@@ -481,7 +607,9 @@ function addHouse(id, i){
   addResident(A, x, z);
 }
 function buildVillage(data){
-  housesGroup.clear(); houseColliders = [];
+  housesGroup.clear(); houseColliders = [{x:MYHOUSE.x, z:MYHOUSE.z, r:2.0}];
+  if (data.level >= 3) while (data.garden.length < 9) data.garden.push({});
+  buildMyHouse(data); buildRoom(data); buildGarden(data, true);
   for (const n of [...npcs]) removeNpc(n);
   buildDeco(data);
   data.residents.forEach((id, i) => addHouse(id, i));
@@ -507,6 +635,12 @@ function refreshHeld(){
   if (holding && player){ heldMesh = makeBread(holding.type, holding.done, holding.tops); heldMesh.scale.setScalar(1.15); player.userData.hand.add(heldMesh); }
 }
 function collide(x, z, r){
+  if (area==='in'){
+    const hs = roomHalf(viewData) - .4;
+    for (const c of roomColliders){ const dx = x-c.x, dz = z-c.z, d = Math.hypot(dx,dz), m = r + c.r; if (d < m && d > 1e-4){ x = c.x + dx/d*m; z = c.z + dz/d*m; } }
+    x = Math.max(ROOM.x-hs, Math.min(ROOM.x+hs, x)); z = Math.max(ROOM.z-hs, Math.min(ROOM.z+hs+.3, z));
+    return [x,z];
+  }
   for (const c of colliders.concat(decoColliders)){
     if (c.box){ const b = c.box; const nx = Math.max(b.minX, Math.min(x, b.maxX)), nz = Math.max(b.minZ, Math.min(z, b.maxZ));
       const dx = x-nx, dz = z-nz, d = Math.hypot(dx,dz);
@@ -554,6 +688,9 @@ const tapRing = mesh(new THREE.RingGeometry(.28,.42,24), new THREE.MeshBasicMate
 tapRing.rotation.x = -Math.PI/2; scene.add(tapRing);
 function tapTargets(){
   const list = [];
+  if (area==='in'){ const hs = roomHalf(viewData); if (!deco) list.push({o:{position:new THREE.Vector3(ROOM.x, 0, ROOM.z+hs-.2), localToWorld:v=>v.add(new THREE.Vector3(ROOM.x,0,ROOM.z+hs-.2))}, x:ROOM.x, z:ROOM.z+hs-.1, r:1, h:.1}); return list; }
+  if (!deco) list.push({o:myHouseGroup, x:MYHOUSE.x, z:MYHOUSE.z+2.6, r:2.2, h:1.4});
+  if (mode==='home' && !deco) plots.forEach((g,i) => { if (g.visible) list.push({o:g, x:g.position.x, z:g.position.z+.75, r:.75, h:.3, plot:i}); });
   if (mode==='home' && !deco){
     list.push({o:oven, x:-4.1, z:-3.7, r:1.6});
     list.push({o:decoTable, x:4.1, z:-3.7, r:1.6});
@@ -580,7 +717,7 @@ function onTap(cx, cy){
   }
   if (best){
     const x = best.x ?? best.o.position.x, z = best.z ?? best.o.position.z;
-    moveTarget = {x, z, act:true, stuck:0, lastD:1e9, npc:best.npc||null};
+    moveTarget = {x, z, act:true, stuck:0, lastD:1e9, npc:best.npc||null, plot:best.plot};
   } else moveTarget = {x:p.x, z:p.z, act:false, stuck:0, lastD:1e9};
   tapRing.position.set(moveTarget.act ? (best.o.position.x) : p.x, .05, moveTarget.act ? best.o.position.z : p.z);
   tapRing.material.opacity = .9; tapRing.scale.setScalar(1);
@@ -590,8 +727,10 @@ function arrive(){
   const t = moveTarget; moveTarget = null;
   if (!t.act) return;
   if (t.npc) P.rot = Math.atan2(t.npc.obj.position.x-P.x, t.npc.obj.position.z-P.z);
-  const a = computeAction(); if (a) a.fn();
+  if (t.plot !== undefined){ P.rot = Math.PI; forcedPlot = t.plot; }
+  const a = computeAction(); forcedPlot = null; if (a) a.fn();
 }
+let forcedPlot = null;
 
 /* ================= 소리 ================= */
 let actx = null;
@@ -688,15 +827,16 @@ function serve(){
   const price = Math.round((BREADS[holding.type].price + 4*n.order.tops.length) * mult);
   let fr = 1 + (exact && holding.done==='perfect' ? 1 : 0) + (n.order.type===n.A.fav ? 1 : 0);
   if (!exact || holding.done==='burnt' || holding.done==='raw') fr = Math.max(0, fr-1);
-  S.coins += price; S.stats.served++; if (exact && holding.done==='perfect') S.stats.perfect++;
-  const lines = !exact ? ['고마워! 토핑은 좀 다르지만 맛있겠다', '어라, 토핑이 조금 다르네? 괜찮아!'] :
+  const homeN = (holding.home||[]).length, bonus = homeN*6; if (homeN) fr += 1;
+  S.coins += price + bonus; S.stats.served++; if (exact && holding.done==='perfect') S.stats.perfect++;
+  const lines = homeN && exact ? ['직접 키운 재료라 더 맛있어!', '텃밭 향이 나는 빵이야~'] : !exact ? ['고마워! 토핑은 좀 다르지만 맛있겠다', '어라, 토핑이 조금 다르네? 괜찮아!'] :
     holding.done==='perfect' ? ['우와, 완벽해! 최고의 빵이야!', '냄새부터 황금빛이야!!'] :
     holding.done==='good' ? ['맛있어 보여! 고마워~', '딱 내가 원하던 거야!'] : ['음… 그래도 고마워!', '조금 아쉽지만 잘 먹을게'];
   say(n, lines[Math.floor(Math.random()*lines.length)]);
   const b = makeBread(holding.type, holding.done, holding.tops); n.obj.userData.hand.add(b);
   const xp = exact ? (holding.done==='perfect'?10:holding.done==='good'?8:5) : 5;
   holding = null; refreshHeld();
-  SFX.coin(); toast(`🪙 +${price}  ·  ${n.A.name} 💗+${fr}`);
+  SFX.coin(); toast(`🪙 +${price}${bonus?` (+${bonus} 직접 키운 재료)`:''}  ·  ${n.A.name} 💗+${fr}`);
   gainXp(xp);
   addFriend(n.A, fr);
   customerLeave(n, true); markDirty(); updateHud();
@@ -721,6 +861,7 @@ function letter(title, body, cb){
 function gainXp(n){
   S.xp += n;
   while (S.xp >= xpNeed(S.level)){ S.xp -= xpNeed(S.level); S.level++;
+    if (S.level >= 3 && S.garden.length < 9){ while (S.garden.length < 9) S.garden.push({}); buildGarden(S, true); }
     const nb = Object.values(BREADS).filter(b=>b.lv===S.level).map(b=>b.em+b.name), nt = Object.values(TOPS).filter(b=>b.lv===S.level).map(b=>b.em+b.name),
       na = ANIMALS.filter(a=>a.lv===S.level).map(a=>a.name), ni = Object.values(ITEMS).filter(b=>b.lv===S.level).map(b=>b.em);
     const parts = []; if (nb.length) parts.push('새 빵: '+nb.join(', ')); if (nt.length) parts.push('새 토핑: '+nt.join(', '));
@@ -758,10 +899,13 @@ function bakeGame(type){
   requestAnimationFrame(loop);
   const take = () => { if (!running) return; running = false; ovenKey = null;
     let acc = 0, done = 'burnt'; for (const z of zones){ acc += z[1]; if (p <= acc){ done = z[0]; break; } }
-    holding = {type, done, tops:[]}; refreshHeld();
+    holding = {type, done, tops:[], home:[]};
+    if ((S.pantry.wheat||0) > 0){ S.pantry.wheat--; holding.home.push('wheat'); }
+    if (type==='pie' && (S.pantry.pumpkin||0) > 0){ S.pantry.pumpkin--; holding.home.push('pumpkin'); }
+    refreshHeld();
     const msg = {perfect:'✨ 완벽하게 구워졌어요!', good:'😊 노릇노릇 잘 구워졌어요', raw:'😅 조금 덜 익었어요', burnt:'💦 앗, 조금 탔어요'}[done];
     done==='perfect' ? SFX.happy() : done==='good' ? SFX.ding() : SFX.sad();
-    closeModal(); toast(msg + ' · 장식대에서 토핑을 올리거나 바로 건네요');
+    closeModal(); toast(msg + (holding.home.length ? ' · 🌾직접 키운 재료를 썼어요' : '') + ' · 장식대에서 토핑을 올리거나 바로 건네요');
     markDirty();
   };
   m.querySelector('#take').onclick = take; ovenKey = take;
@@ -779,23 +923,24 @@ function openDeco(){
   m.querySelectorAll('.card[data-k]').forEach(c => c.onclick = () => { const k = c.dataset.k;
     if (sel.has(k)) sel.delete(k); else { if (sel.size>=2){ toast('토핑은 두 가지까지예요'); return; } sel.add(k); } SFX.pop(); draw(); });
   m.querySelector('#dClear').onclick = () => { sel.clear(); draw(); };
-  m.querySelector('#dOk').onclick = () => { holding.tops = [...sel].sort(); refreshHeld(); SFX.ding(); closeModal(); toast('완성! 카운터에서 손님에게 건네요'); };
+  m.querySelector('#dOk').onclick = () => { holding.tops = [...sel].sort(); holding.home ||= [];
+    for (const t of holding.tops) if ((t==='berry'||t==='blue') && (S.pantry[t]||0) > 0 && !holding.home.includes(t)){ S.pantry[t]--; holding.home.push(t); } refreshHeld(); SFX.ding(); closeModal(); toast('완성! 카운터에서 손님에게 건네요'); };
   draw();
 }
 
 /* ================= 상점 / 가방 / 꾸미기 ================= */
 function openShop(tab='shop'){
-  const m = openModal(`<h2>${tab==='shop'?'🛍️ 숲속 잡화점':'🎒 가방'}</h2>
-    <div class="tabs"><button data-t="shop" class="${tab==='shop'?'on':''}">상점</button><button data-t="bag" class="${tab==='bag'?'on':''}">가방</button></div>
-    <p class="sub">🪙 ${S.coins}</p><div class="grid" id="shopGrid"></div>`);
+  const m = openModal(`<h2>${tab==='bag'?'🎒 가방':'🛍️ 숲속 잡화점'}</h2>
+    <div class="tabs"><button data-t="shop" class="${tab==='shop'?'on':''}">마을 꾸미기</button><button data-t="furn" class="${tab==='furn'?'on':''}">가구</button><button data-t="bag" class="${tab==='bag'?'on':''}">가방</button></div>
+    <p class="sub">🪙 ${S.coins}${tab==='bag' ? '<br>곳간: ' + (Object.entries(S.pantry).filter(([k,v])=>v>0).map(([k,v])=>CROPS[k].em+v).join(' ') || '비어 있어요 (텃밭에서 수확해요)') : ''}</p><div class="grid" id="shopGrid"></div>`);
   m.querySelectorAll('.tabs button').forEach(b => b.onclick = () => openShop(b.dataset.t));
   const grid = m.querySelector('#shopGrid');
-  if (tab==='shop'){
-    grid.innerHTML = Object.entries(ITEMS).map(([k,it]) => `<button class="card ${it.lv>S.level?'lock':''}" data-k="${k}" ${it.lv>S.level?'disabled':''}>
+  if (tab==='shop' || tab==='furn'){
+    grid.innerHTML = Object.entries(ITEMS).filter(([k,it]) => !!it.room === (tab==='furn')).map(([k,it]) => `<button class="card ${it.lv>S.level?'lock':''}" data-k="${k}" ${it.lv>S.level?'disabled':''}>
       <span class="em">${it.em}</span>${it.name}<small>${it.lv>S.level?`Lv.${it.lv}에 열려요`:`🪙 ${it.price}`}</small></button>`).join('');
     grid.querySelectorAll('.card').forEach(c => c.onclick = () => { const it = ITEMS[c.dataset.k];
       if (S.coins < it.price){ toast('동전이 부족해요. 빵을 더 팔아봐요!'); SFX.sad(); return; }
-      S.coins -= it.price; S.items[c.dataset.k] = (S.items[c.dataset.k]||0)+1; SFX.coin(); toast(`${it.em} ${it.name}을(를) 샀어요! 가방에 있어요`); updateHud(); markDirty(); openShop('shop'); });
+      S.coins -= it.price; S.items[c.dataset.k] = (S.items[c.dataset.k]||0)+1; SFX.coin(); toast(`${it.em} ${it.name}을(를) 샀어요! 가방에 있어요`); updateHud(); markDirty(); openShop(tab); });
   } else {
     const ks = Object.keys(S.items).filter(k=>S.items[k]>0);
     grid.innerHTML = ks.length ? ks.map(k => `<button class="card" data-k="${k}"><span class="em">${ITEMS[k].em}</span>${ITEMS[k].name}<small>${S.items[k]}개 · 눌러서 놓기</small></button>`).join('')
@@ -805,8 +950,11 @@ function openShop(tab='shop'){
 }
 let ghost = null;
 const raycaster = new THREE.Raycaster(), groundPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+const decoList = () => area==='in' ? S.room : S.placed;
+const itemFits = id => area==='in' ? (ITEMS[id].room || id==='pot' || id==='pumpkin' || id==='mushroom') : !ITEMS[id].room;
 function startDeco(item=null){
   if (mode!=='home') return;
+  if (item && !itemFits(item)){ toast(area==='in' ? '이건 밖에 놓는 물건이에요. 밖에서 꾸며요' : '가구는 집 안에서 놓을 수 있어요 🏠'); item = null; }
   deco = {item, rot:0, gx:0, gz:0, manual:false};
   $('decobar').classList.add('show'); setGhost();
   toast(item ? '놓을 곳으로 가서(또는 땅을 눌러서) [놓기]를 눌러요' : '물건 가까이 가서 [치우기]로 가방에 넣을 수 있어요');
@@ -815,7 +963,7 @@ function endDeco(){ deco = null; setGhost(); $('decobar').classList.remove('show
 function setGhost(){
   if (ghost){ world.remove(ghost); ghost = null; }
   if (!deco || !deco.item) return;
-  ghost = makeItem(deco.item); ghost.traverse(o => { if (o.isMesh){ o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = .6; o.castShadow = false; } });
+  ghost = makeItem(deco.item); ghost.userData.isGhost = true; ghost.traverse(o => { if (o.isMesh){ o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = .6; o.castShadow = false; } });
   world.add(ghost);
 }
 function rotateDeco(){ if (!deco) return; deco.rot = (deco.rot+1)%4; SFX.pop(); }
@@ -825,7 +973,14 @@ function placeGhostAtScreen(cx, cy){
   deco.gx = Math.round(p.x*2)/2; deco.gz = Math.round(p.z*2)/2; deco.manual = true;
 }
 function ghostValid(x, z){
+  if (area==='in'){ const hs = roomHalf(S) - .5, lx = x-ROOM.x, lz = z-ROOM.z;
+    if (Math.abs(lx) > hs || Math.abs(lz) > hs) return false;
+    if (lz > hs-1 && Math.abs(lx) < 1.1) return false; // 문 앞
+    if (ITEMS[deco.item].r) for (const p of S.room) if (ITEMS[p.id].r && Math.hypot(lx-p.x, lz-p.z) < ITEMS[deco.item].r + ITEMS[p.id].r - .1) return false;
+    return true; }
   if (Math.hypot(x,z) > WORLD_R-.5) return false;
+  if (Math.abs(x-GARDEN.x) < 2.6 && Math.abs(z-GARDEN.z) < 3) return false; // 텃밭
+  if (Math.abs(x-MYHOUSE.x) < 2.5 && z > MYHOUSE.z-2.3 && z < MYHOUSE.z+3.6) return false; // 내 집
   if (x > -7 && x < 7 && z > -14 && z < -1.2) return false; // 빵집 앞마당
   if (Math.hypot(x+3, z-1.8) < 1) return false;
   for (const c of decoColliders) if (Math.hypot(x-c.x, z-c.z) < c.r + (ITEMS[deco.item].r||.3)) return false;
@@ -833,22 +988,23 @@ function ghostValid(x, z){
   return true;
 }
 function nearestPlaced(){
-  let best = -1, bd = 1.8;
-  S.placed.forEach((p,i) => { const d = Math.hypot(P.x-p.x, P.z-p.z); if (d < bd){ bd = d; best = i; } });
+  let best = -1, bd = 1.8; const ox = area==='in'?ROOM.x:0, oz = area==='in'?ROOM.z:0;
+  decoList().forEach((p,i) => { const d = Math.hypot(P.x-ox-p.x, P.z-oz-p.z); if (d < bd){ bd = d; best = i; } });
   return best;
 }
 function decoAction(){
   if (deco.item){
     const x = deco.gx, z = deco.gz;
     if (!ghostValid(x,z)){ toast('여기에는 놓을 수 없어요'); SFX.sad(); return; }
-    S.placed.push({id:deco.item, x, z, r:deco.rot}); S.items[deco.item]--; SFX.pop();
+    if (area==='in') S.room.push({id:deco.item, x:x-ROOM.x, z:z-ROOM.z, r:deco.rot}); else S.placed.push({id:deco.item, x, z, r:deco.rot});
+    S.items[deco.item]--; SFX.pop();
     if (S.items[deco.item] <= 0){ delete S.items[deco.item]; deco.item = null; setGhost(); toast('다 놓았어요! 가방에서 다른 물건을 골라요'); }
     deco.manual = false;
-    buildDeco(S); markDirty();
+    area==='in' ? buildRoom(S) : buildDeco(S); markDirty();
   } else {
     const i = nearestPlaced(); if (i < 0){ toast('가방에서 놓을 물건을 골라요 🎒'); return; }
-    const p = S.placed.splice(i,1)[0]; S.items[p.id] = (S.items[p.id]||0)+1; SFX.pop(); toast(`${ITEMS[p.id].em} 가방에 넣었어요`);
-    buildDeco(S); markDirty();
+    const p = decoList().splice(i,1)[0]; S.items[p.id] = (S.items[p.id]||0)+1; SFX.pop(); toast(`${ITEMS[p.id].em} 가방에 넣었어요`);
+    area==='in' ? buildRoom(S) : buildDeco(S); markDirty();
   }
 }
 $('bShop').onclick = () => { unlockAudio(); openShop('shop'); };
@@ -856,11 +1012,66 @@ $('bBag').onclick = () => { unlockAudio(); openShop('bag'); };
 $('bDeco').onclick = () => { unlockAudio(); deco ? endDeco() : startDeco(null); };
 $('dRot').onclick = rotateDeco; $('dBag').onclick = () => openShop('bag'); $('dDone').onclick = endDeco;
 
+/* ================= 텃밭 ================= */
+function openPlant(i){
+  const m = openModal(`<h2>🌱 무엇을 심을까요?</h2><p class="sub">심고 물을 주면 실제 시간이 지나며 자라요. 게임을 꺼도 자라요!</p><div class="grid">${
+    Object.entries(CROPS).map(([k,c]) => `<button class="card ${c.lv>S.level?'lock':''}" data-k="${k}" ${c.lv>S.level?'disabled':''}><span class="em">${c.em}</span>${c.name}<small>${c.lv>S.level?`Lv.${c.lv}에 열려요`:`씨앗 🪙${c.seed} · ${c.grow>=60?c.grow/60+'분':c.grow+'초'}`}</small><small>${c.hint}</small></button>`).join('')}</div>`);
+  m.querySelectorAll('.card[data-k]').forEach(b => b.onclick = () => { const c = CROPS[b.dataset.k];
+    if (S.coins < c.seed){ toast('동전이 부족해요'); SFX.sad(); return; }
+    S.coins -= c.seed; S.garden[i] = {crop:b.dataset.k, planted:Date.now(), watered:null}; SFX.pop(); closeModal();
+    toast(`${c.em} 씨앗을 심었어요! 이제 물을 줘요 💧`); updateHud(); buildGarden(S, true); markDirty(); });
+}
+function water(i){ S.garden[i].watered = Date.now(); SFX.ding(); toast('💧 물을 줬어요. 쑥쑥 자랄 거예요'); buildGarden(S, true); markDirty(); }
+function harvest(i){
+  const pl = S.garden[i], c = CROPS[pl.crop], n = pl.crop==='pumpkin' ? 1 : 2 + (Math.random()<.4?1:0);
+  S.pantry[pl.crop] = (S.pantry[pl.crop]||0) + n; S.garden[i] = {}; SFX.happy(); gainXp(3);
+  toast(`${c.em} ${c.name} ${n}개 수확! 곳간에 넣었어요`); buildGarden(S, true); markDirty();
+}
+
+/* ================= 내 집 ================= */
+function enterHouse(){
+  area = 'in'; moveTarget = null; const hs = roomHalf(viewData);
+  P.x = ROOM.x; P.z = ROOM.z + hs - .6; P.rot = Math.PI; camera.position.set(P.x, 10, P.z + 10); SFX.pop();
+  toast(mode==='home' ? '🏠 우리 집이에요. 가구를 사서 🌷꾸미기로 놓아봐요' : `🏠 ${viewData.name}의 집에 들어왔어요`);
+}
+function exitHouse(){ if (deco) endDeco(); area = 'out'; moveTarget = null; P.x = MYHOUSE.x; P.z = MYHOUSE.z + 2.8; P.rot = 0; camera.position.set(P.x, 13, P.z + 12); SFX.pop(); }
+function openHouseMenu(){
+  const h = S.house, next = HOUSE_COST[h.stage+1];
+  const sw = (arr, key) => arr.map(c => `<button class="sw ${h[key]===c?'on':''}" data-${key}="${c}" style="background:#${c.toString(16).padStart(6,'0')}"></button>`).join('');
+  const m = openModal(`<h2>🏠 ${esc(S.name)}의 집</h2><p class="sub">${['','오두막','아담한 집','현관 달린 2층 집'][h.stage]} · 방 크기 ${h.stage}단계</p>
+    <div class="row" style="margin-top:0"><button class="btn" id="hIn">들어가기</button></div>
+    <h3 style="font-weight:400;margin:14px 0 4px;text-align:center">벽 색</h3><div class="swatches">${sw(WALLS,'wall')}</div>
+    <h3 style="font-weight:400;margin:4px 0;text-align:center">지붕 색</h3><div class="swatches">${sw(ROOFS,'roof')}</div>
+    ${next ? `<div class="row"><button class="btn green" id="hUp" ${S.level<next.lv?'disabled':''}>🔨 증축하기 · 🪙${next.coins}${S.level<next.lv?` (Lv.${next.lv}부터)`:''}</button></div>` : '<p class="sub" style="margin-top:12px">가장 큰 집이에요! 🎉</p>'}`);
+  m.querySelector('#hIn').onclick = () => { closeModal(); enterHouse(); };
+  m.querySelectorAll('[data-wall]').forEach(b => b.onclick = () => { h.wall = +b.dataset.wall; buildMyHouse(S); buildRoom(S); markDirty(); SFX.pop(); openHouseMenu(); });
+  m.querySelectorAll('[data-roof]').forEach(b => b.onclick = () => { h.roof = +b.dataset.roof; buildMyHouse(S); buildRoom(S); markDirty(); SFX.pop(); openHouseMenu(); });
+  const up = m.querySelector('#hUp'); if (up) up.onclick = () => {
+    if (S.coins < next.coins){ toast('동전이 부족해요. 빵을 더 팔아봐요!'); SFX.sad(); return; }
+    S.coins -= next.coins; h.stage++; buildMyHouse(S); buildRoom(S); updateHud(); markDirty(); closeModal();
+    SFX.lvl(); letter('집을 넓혔어요!', `<span style="font-size:42px">🏡</span><br>${['','','아담한 집','현관 달린 2층 집'][h.stage]}이 됐어요.<br>방도 넓어져서 가구를 더 놓을 수 있어요!`);
+  };
+}
+
 /* ================= 행동 ================= */
 let currentAction = null;
 function computeAction(){
+  if (area==='in' && !deco){
+    const hs = roomHalf(viewData);
+    if (P.z - ROOM.z > hs-1.3 && Math.abs(P.x-ROOM.x) < 1.4) return {label:'나가기', fn:exitHouse};
+    if (mode==='home') return null;
+    return null;
+  }
   if (deco){ if (deco.item) return {label:'놓기', fn:decoAction}; return nearestPlaced()>=0 ? {label:'치우기', fn:decoAction} : null; }
   const d = (o, r) => Math.hypot(P.x-o.position.x, P.z-o.position.z) < r;
+  if (Math.hypot(P.x-MYHOUSE.x, P.z-(MYHOUSE.z+2.6)) < 1.4) return mode==='home' ? {label:'우리 집', fn:openHouseMenu} : {label:'들어가기', fn:enterHouse};
+  if (mode==='home'){ let pi = forcedPlot, bd = 1.0;
+    if (pi===null) plots.forEach((g,i) => { if (!g.visible) return; const dd = Math.hypot(P.x-g.position.x, P.z-g.position.z); if (dd < bd){ bd = dd; pi = i; } });
+    if (pi!==null){ const pl = S.garden[pi], pr = cropProg(pl);
+      if (!pl.crop) return {label:'심기', fn:()=>openPlant(pi)};
+      if (!pl.watered) return {label:'물 주기', fn:()=>water(pi)};
+      if (pr >= 1) return {label:'수확', fn:()=>harvest(pi)};
+      return {label:'자라는 중', fn:()=>{ const left = Math.ceil(CROPS[pl.crop].grow*(1-pr)); toast(`${CROPS[pl.crop].em} ${left>=60?Math.ceil(left/60)+'분':left+'초'} 뒤에 수확할 수 있어요`); }}; } }
   if (mode==='visit'){
     if (d(mailbox, 2)) return {label:'방명록', fn:writeGuestbook};
     const owner = npcs.find(n=>n.kind==='owner'); if (owner && d(owner.obj, 2.2)) return {label:'인사하기', fn:()=>{ say(owner, `어서 와! ${viewData.name}의 빵집이야`); SFX.ding(); }};
@@ -892,7 +1103,7 @@ function updateSky(){
 }
 
 /* ================= 메인 루프 ================= */
-let last = performance.now(), skyT = 0;
+let last = performance.now(), skyT = 0, gardenT = 0;
 function tick(now){
   requestAnimationFrame(tick);
   const dt = Math.min(.1, (now-last)/1000); last = now;
@@ -930,7 +1141,7 @@ function tick(now){
       if (n.state==='walk' || n.state==='leave'){
         const dx = n.tx-o.position.x, dz = n.tz-o.position.z, dd = Math.hypot(dx,dz);
         if (dd > .1){ const s = Math.min(dd, 4.2*dt); o.position.x += dx/dd*s; o.position.z += dz/dd*s; o.rotation.y = Math.atan2(dx,dz); moving = true; }
-        else if (n.state==='walk'){ n.state='wait'; o.rotation.y = Math.hypot(P.x-o.position.x, P.z-o.position.z) < 7 ? Math.atan2(P.x-o.position.x, P.z-o.position.z) : Math.PI; SFX.ding(); n.bubble.style.display=''; }
+        else if (n.state==='walk'){ n.state='wait'; if (area==='in' && mode==='home') toast(`🔔 ${n.A.name}이(가) 빵집에 왔어요!`); o.rotation.y = Math.hypot(P.x-o.position.x, P.z-o.position.z) < 7 ? Math.atan2(P.x-o.position.x, P.z-o.position.z) : Math.PI; SFX.ding(); n.bubble.style.display=''; }
         else { // 떠남 완료
           if (n.resident){ n.kind='resident'; n.busy=false; n.resident.busy=false; const i = npcs.indexOf(n); npcs.splice(i,1); n.resident.label.style.display='';
             const h = o.userData.hand; h.clear(); n.resident.tx=n.tx; n.resident.tz=n.tz; }
@@ -966,9 +1177,13 @@ function tick(now){
   // 행동 버튼
   if (!paused){ const a = computeAction(); currentAction = a; if (a){ actionBtn.textContent = a.label; actionBtn.classList.add('show'); } else actionBtn.classList.remove('show'); }
   else actionBtn.classList.remove('show');
+  // 텃밭 성장
+  gardenT -= dt; if (gardenT <= 0){ gardenT = 2; buildGarden(viewData); }
+  plots.forEach(g => g.traverse(o => { if (o.userData.ripe) o.position.y = .12 + Math.abs(Math.sin(now/400))*.04; }));
+  roomDecoGroup.traverse(o => { if (o.userData.swing) o.position.x = Math.sin(now/500)*.12; });
   // 카메라
-  const tx = P.x, tz = P.z;
-  camera.position.lerp(_v.set(tx, 13*camZoom, tz + 12.5*camZoom), Math.min(1, dt*5));
+  const tx = P.x, tz = P.z, cz = area==='in' ? .72 : camZoom;
+  camera.position.lerp(_v.set(tx, 13*cz, tz + 12.5*cz), Math.min(1, dt*5));
   camera.lookAt(tx, 1, tz - 1);
   sun.position.set(tx + 10, 22, tz + 8); sun.target.position.set(tx, 0, tz);
   skyT -= dt; if (skyT <= 0){ updateSky(); skyT = 30; }
@@ -998,7 +1213,9 @@ document.addEventListener('visibilitychange', () => {
 });
 addEventListener('pagehide', () => { markDirty(); saveRemote(true); });
 
-function normalize(d){ const f = freshSave(); d = Object.assign(f, d||{}); d.items ||= {}; d.placed ||= []; d.friends ||= {}; d.residents ||= []; d.gifted ||= {}; d.stats = Object.assign({served:0,perfect:0}, d.stats||{}); return d; }
+function normalize(d){ const f = freshSave(); d = Object.assign(f, d||{}); d.items ||= {}; d.placed ||= []; d.friends ||= {}; d.residents ||= []; d.gifted ||= {}; d.stats = Object.assign({served:0,perfect:0}, d.stats||{});
+  d.house = Object.assign({stage:1, wall:0xfff4e2, roof:0x7aa7d9}, d.house||{}); d.room ||= []; d.garden ||= [{},{},{},{},{},{}]; d.pantry ||= {};
+  return d; }
 
 /* ================= 시작 / 로그인 ================= */
 async function boot(){
@@ -1083,7 +1300,7 @@ function createCharacter(prev){
   };
 }
 function enterHome(first){
-  moveTarget = null;
+  moveTarget = null; area = 'out';
   mode = 'home'; viewData = S; visitInfo = null; document.body.classList.remove('visiting'); $('visitbar').classList.remove('show');
   P.x = 0; P.z = 1.5; P.rot = Math.PI; holding = holding || null;
   buildVillage(S); buildPlayer(); updateHud(); updateSky(); paused = false; spawnT = 2;
@@ -1121,7 +1338,7 @@ async function visit(id){
   closeModal(true);
   if (deco) endDeco();
   for (const c of customers()) removeNpc(c);
-  moveTarget = null; mode = 'visit'; viewData = normalize(data.data); viewData.name = data.nickname; visitInfo = {user_id:id, nickname:data.nickname, hearts:data.hearts};
+  moveTarget = null; area = 'out'; mode = 'visit'; viewData = normalize(data.data); viewData.name = data.nickname; visitInfo = {user_id:id, nickname:data.nickname, hearts:data.hearts};
   document.body.classList.add('visiting'); $('visitbar').classList.add('show'); $('visitName').textContent = `${data.nickname}의 마을 · 💗${data.hearts}`;
   P.x = 0; P.z = 18; P.rot = Math.PI;
   buildVillage(viewData); buildPlayer(); paused = false; SFX.happy();
@@ -1184,7 +1401,7 @@ $('bMenu').onclick = () => {
   const inn = m.querySelector('#mIn'); if (inn) inn.onclick = () => { closeModal(true); paused = true; showTitle(); };
 };
 
-window.__dbg = { proj:(k)=>{ const o={oven,decoTable,counter,mailbox}[k]; _v.set(0,1,0); o.localToWorld(_v); _v.project(camera); return [(_v.x+1)/2*innerWidth,(1-_v.y)/2*innerHeight]; }, get S(){return S;}, P, get npcs(){return npcs;}, get holding(){return holding;}, get mode(){return mode;}, spawnCustomer, doAction, openOven, openDeco, startDeco, serve, gainXp };
+window.__dbg = { get area(){return area;}, enterHouse, exitHouse, proj:(k)=>{ const o={oven,decoTable,counter,mailbox}[k]; _v.set(0,1,0); o.localToWorld(_v); _v.project(camera); return [(_v.x+1)/2*innerWidth,(1-_v.y)/2*innerHeight]; }, get S(){return S;}, P, get npcs(){return npcs;}, get holding(){return holding;}, get mode(){return mode;}, spawnCustomer, doAction, openOven, openDeco, startDeco, serve, gainXp };
 requestAnimationFrame(tick);
 camera.position.set(0, 14, 16); camera.lookAt(0,1,0);
 updateSky();
