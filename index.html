@@ -115,7 +115,7 @@ input:focus,textarea:focus{border-color:var(--accent)}
   <div class="sp"></div>
   <div class="pill" id="coins">🪙 <span id="coinText">0</span></div>
 </div>
-<div class="topctl"><button id="zOut" aria-label="축소">－</button><button id="zIn" aria-label="확대">＋</button><button id="bToggle" aria-label="메뉴 열고 닫기">☰</button></div>
+<div class="topctl"><button id="bToggle" aria-label="메뉴 열고 닫기">☰</button></div>
 <div class="side" id="side">
   <button class="ibtn homeonly" id="bShop">🛍️<small>상점</small></button>
   <button class="ibtn homeonly" id="bBag">🎒<small>가방</small></button>
@@ -609,14 +609,17 @@ const OVEN_STAND = [-3.9,-4.4], DECO_STAND = [-4.0,-2.3];
 const cafe = new THREE.Group(); cafe.position.set(CAFE.x,0,CAFE.z); world.add(cafe);
 const cafeBar = new THREE.Group(); const cafeCounter = new THREE.Group(); const cafeSign = new THREE.Group();
 let cafeColliders = [];
+let cafeLabel = null;
 function buildCafe(d){
-  cafe.clear(); cafeColliders = [];
+  cafe.clear(); cafeColliders = []; if (cafeLabel) cafeLabel.style.display = 'none';
   if (!d.cafe?.open){
     cafeSign.clear(); cafeSign.position.set(0,0,1.5); cafe.add(cafeSign);
     cafeSign.add(mesh(G.cyl(.06,.06,1.1,6), M(0x8b5e3c),0,.55,0)); cafeSign.add(mesh(G.box(1.4,.7,.08), M(0xfff1dc),0,1.2,0));
     cafeSign.add(mesh(G.cyl(.16,.12,.22,10), M(0xffffff),-.3,1.22,.06,false)); cafeSign.add(mesh(G.cyl(.13,.13,.02,10), M(0x6b3d26),-.3,1.33,.06,false));
     cafeSign.add(mesh(G.box(.5,.08,.02), M(0x8bc47a),.25,1.3,.05,false)); cafeSign.add(mesh(G.box(.4,.08,.02), M(0x8bc47a),.25,1.12,.05,false));
     for (const [x,z] of [[-1.6,-1.6],[1.6,-1.6],[-1.6,1.6],[1.6,1.6]]) cafe.add(mesh(G.cyl(.05,.05,.3,6), M(0xcf9a66),x,.15,z));
+    cafeSign.scale.setScalar(1.6);
+    if (mode==='home'){ cafeLabel ||= mkLabel('nametag', '☕ 카페 자리 · 눌러서 열기'); cafeLabel.style.display = ''; }
     return;
   }
   // 바닥 데크
@@ -1314,8 +1317,6 @@ function openRoomMenu(){
   m.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => { h.fl = +b.dataset.fl; buildRoom(S); markDirty(); SFX.pop(); openRoomMenu(); });
 }
 $('bRoom').onclick = () => { unlockAudio(); openRoomMenu(); };
-$('zIn').onclick = () => { camZoom = Math.max(.45, camZoom - .2); };
-$('zOut').onclick = () => { camZoom = Math.min(2.2, camZoom + .2); };
 { let open = true; try{ open = localStorage.getItem('kkoma-menu') !== 'closed'; }catch(e){}
   const apply = () => { $('side').classList.toggle('closed', !open); $('bToggle').textContent = open ? '✕' : '☰'; };
   $('bToggle').onclick = () => { open = !open; apply(); try{ localStorage.setItem('kkoma-menu', open?'open':'closed'); }catch(e){} SFX.pop(); }; apply(); }
@@ -1522,6 +1523,7 @@ function tick(now){
   // 행동 버튼
   if (!paused){ const a = computeAction(); currentAction = a; if (a){ actionBtn.textContent = a.label; actionBtn.classList.add('show'); } else actionBtn.classList.remove('show'); }
   else actionBtn.classList.remove('show');
+  if (cafeLabel && cafeLabel.style.display !== 'none') placeLabel(cafeLabel, cafeSign, 2.6);
   // 텃밭 성장, 알바 남은 시간
   gardenT -= dt; if (gardenT <= 0){ gardenT = 2; buildGarden(viewData);
     const ab = staffActive('bakery'), ac = staffActive('cafe'), cnt = (ab?1:0)+(ac?1:0);
