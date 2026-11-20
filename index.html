@@ -232,6 +232,11 @@ const STAFF = [
   {id:'danchu',name:'단추', sp:'bear',   color:0xd9b38a, wage:90,  speed:3.4, bake:4,   perfect:.25, lv:2, desc:'성실하고 손이 야무져요'},
   {id:'byeol', name:'별이', sp:'cat',    color:0x9a9aa6, wage:160, speed:4.4, bake:2.5, perfect:.5, lv:4, desc:'손이 아주 빠른 베테랑'},
 ];
+const CAFE_STAFF = [
+  {id:'moka',  name:'모카',   sp:'squirrel', color:0xb07a52, wage:40,  speed:2.8, bake:5,   perfect:.15, lv:2, desc:'커피 향을 좋아하는 새내기'},
+  {id:'latte', name:'라떼',   sp:'fox',      color:0xf2c79a, wage:90,  speed:3.6, bake:3.5, perfect:.3,  lv:3, desc:'손님 취향을 잘 기억해요'},
+  {id:'cocoa', name:'코코아', sp:'bear',     color:0x7a5440, wage:160, speed:4.4, bake:2.2, perfect:.55, lv:4, desc:'라떼아트 장인 바리스타'},
+];
 const SHIFT_MS = 10*60*1000;
 const DRINKS = {
   americano:{name:'아메리카노', em:'☕', price:10, lv:1, color:0x4a2c1e, crop:'coffee'},
@@ -1237,9 +1242,12 @@ function pourGame(type, ice){
 function serveCafe(){
   const cs = customers().filter(c=>c.state==='wait' && c.shop==='cafe').sort((a,b)=>a.slot-b.slot);
   if (!cs.length){ toast('기다리는 카페 손님이 없어요'); return; }
-  const n = cs.find(c=>c.order.drink===holding.type && c.order.ice===holding.ice) || cs.find(c=>c.order.drink===holding.type);
+  const n = cs.filter(c=>!c.claimed).find(c=>c.order.drink===holding.type && c.order.ice===holding.ice) || cs.find(c=>c.order.drink===holding.type && c.order.ice===holding.ice) || cs.find(c=>c.order.drink===holding.type);
   if (!n){ say(cs[0], `저는 ${DRINKS[cs[0].order.drink].name} ${cs[0].order.ice?'차가운':'따뜻한'} 걸 주문했어요!`); SFX.sad(); return; }
   const h = holding; holding = null; refreshHeld();
+  sellDrink(n, h, null);
+}
+function sellDrink(n, h, worker){
   const iceOk = n.order.ice === h.ice, mult = {perfect:1.4, good:1, meh:.6}[h.q] * (iceOk?1:.7);
   const price = Math.round(DRINKS[h.type].price * mult), bonus = h.home.length*6;
   let fr = 1 + (h.q==='perfect' && iceOk ? 1 : 0) + (h.home.length ? 1 : 0); if (!iceOk || h.q==='meh') fr = Math.max(0, fr-1);
@@ -1247,8 +1255,8 @@ function serveCafe(){
   const lines = !iceOk ? ['어? 온도가 다르지만 고마워!'] : h.q==='perfect' ? ['향이 정말 좋다~!', '딱 내 취향이야!'] : h.q==='good' ? ['고마워, 잘 마실게!'] : ['조금 아쉽지만 고마워'];
   say(n, h.home.length && iceOk ? '텃밭에서 키운 걸로 만들었구나!' : lines[Math.floor(Math.random()*lines.length)]);
   n.obj.userData.hand.add(makeDrink(h.type, h.ice, h.q));
-  SFX.coin(); toast(`☕ 🪙 +${price}${bonus?` (+${bonus} 텃밭 재료)`:''} · ${n.A.name} 💗+${fr}`);
-  gainXp(h.q==='perfect'?8:6); addFriend(n.A, fr); customerLeave(n, true); markDirty(); updateHud();
+  SFX.coin(); toast(`${worker?`☕ ${worker.W.name}이(가) 팔았어요 · `:'☕ '}🪙 +${price}${bonus?` (+${bonus} 텃밭 재료)`:''} · ${n.A.name} 💗+${fr}`);
+  gainXp(worker ? 3 : h.q==='perfect'?8:6); addFriend(n.A, fr); customerLeave(n, true); markDirty(); updateHud();
 }
 
 /* ================= 텃밭 ================= */
@@ -1313,49 +1321,69 @@ $('zOut').onclick = () => { camZoom = Math.min(2.2, camZoom + .2); };
   $('bToggle').onclick = () => { open = !open; apply(); try{ localStorage.setItem('kkoma-menu', open?'open':'closed'); }catch(e){} SFX.pop(); }; apply(); }
 
 /* ================= 알바생 ================= */
-let staffNpc = null;
-const staffActive = () => S.staff && S.staff.until > Date.now() && STAFF.find(x=>x.id===S.staff.id);
-function spawnStaff(){
-  if (staffNpc){ removeNpc(staffNpc); staffNpc = null; }
-  const W = staffActive(); if (!W || mode!=='home') return;
-  const o = makeAnimal(W.sp, W.color, {baker:true}); o.position.set(2.6,0,-4.4); world.add(o);
-  staffNpc = {obj:o, kind:'staff', W, state:'idle', job:null, wait:0, label:mkLabel('nametag', '알바 '+W.name)};
-  npcs.push(staffNpc);
+const staffNpcs = {bakery:null, cafe:null};
+const staffKey = shop => shop==='cafe' ? 'cafeStaff' : 'staff';
+const staffList = shop => shop==='cafe' ? CAFE_STAFF : STAFF;
+const staffActive = shop => { const st = S[staffKey(shop)]; return st && st.until > Date.now() && staffList(shop).find(x=>x.id===st.id); };
+const STAFF_HOME = {bakery:[2.6,-4.4], cafe:[CAFE.x+1.4, CAFE.z-.3]};
+function spawnStaff(shop){
+  if (!shop){ spawnStaff('bakery'); spawnStaff('cafe'); return; }
+  if (staffNpcs[shop]){ removeNpc(staffNpcs[shop]); staffNpcs[shop] = null; }
+  const W = staffActive(shop); if (!W || mode!=='home') return;
+  if (shop==='cafe' && !S.cafe.open) return;
+  const o = makeAnimal(W.sp, W.color, {baker:true}); o.position.set(...[STAFF_HOME[shop][0],0,STAFF_HOME[shop][1]]); world.add(o);
+  const n = {obj:o, kind:'staff', shop, W, state:'idle', job:null, wait:0, label:mkLabel('nametag', (shop==='cafe'?'카페 알바 ':'알바 ')+W.name)};
+  staffNpcs[shop] = n; npcs.push(n);
 }
-function openStaff(){
-  const cur = staffActive(), left = cur ? Math.ceil((S.staff.until-Date.now())/60000) : 0;
-  const m = openModal(`<h2>🧑‍🍳 알바생 구하기</h2><p class="sub">고용하면 10분 동안 손님 주문을 대신 굽고 팔아줘요.<br>게임을 켜 둔 동안 일하고, 판매 금액은 모두 빵집 몫이에요.</p>
+const spEm = {rabbit:'🐰',bear:'🐻',cat:'🐱',fox:'🦊',squirrel:'🐿️'};
+function openStaff(shop='bakery'){
+  if (shop==='cafe' && !S.cafe.open) shop = 'bakery';
+  const cur = staffActive(shop), st = S[staffKey(shop)], left = cur ? Math.ceil((st.until-Date.now())/60000) : 0;
+  const other = staffActive(shop==='cafe'?'bakery':'cafe');
+  const m = openModal(`<h2>🧑‍🍳 알바생 구하기</h2>
+    <div class="tabs"><button data-s="bakery" class="${shop==='bakery'?'on':''}">🥐 빵집</button><button data-s="cafe" class="${shop==='cafe'?'on':''}" ${S.cafe.open?'':'disabled style="opacity:.45"'}>☕ 카페${S.cafe.open?'':' (열기 전)'}</button></div>
+    <p class="sub">고용하면 10분 동안 ${shop==='cafe'?'음료 주문을 대신 만들어':'빵 주문을 대신 굽고 장식해'} 팔아줘요.<br>게임을 켜 둔 동안 일하고, 매출은 모두 은성님 몫이에요.</p>
     ${cur ? `<div class="gb" style="text-align:center;margin-bottom:10px">지금 <b>${cur.name}</b>이(가) 일하는 중 · ${left}분 남음</div>` : ''}
-    <div class="list">${STAFF.map(w => `<div class="li"><div style="font-size:30px">${{rabbit:'🐰',bear:'🐻',cat:'🐱'}[w.sp]}</div><div class="grow"><div>${w.name} <small>${SPECIES[w.sp]}</small></div><small>${w.desc} · 속도 ${'★'.repeat(Math.round(w.speed-1.5))} · 완벽한 빵 ${Math.round(w.perfect*100)}%</small></div>
-      <button data-id="${w.id}" ${w.lv>S.level?'disabled style="opacity:.5"':''}>${w.lv>S.level?`Lv.${w.lv}`:cur&&cur.id===w.id?`10분 연장 🪙${w.wage}`:`고용 🪙${w.wage}`}</button></div>`).join('')}</div>`);
+    ${other ? `<p class="sub" style="margin-top:-6px">${shop==='cafe'?'빵집':'카페'}에서는 ${other.name}이(가) 일하는 중이에요</p>` : ''}
+    <div class="list">${staffList(shop).map(w => `<div class="li"><div style="font-size:30px">${spEm[w.sp]}</div><div class="grow"><div>${w.name} <small>${SPECIES[w.sp]}</small></div><small>${w.desc} · 속도 ${'★'.repeat(Math.round(w.speed-1.5))} · 완벽 ${Math.round(w.perfect*100)}%</small></div>
+      <button data-id="${w.id}" ${w.lv>S.level?'disabled style="opacity:.5"':''}>${w.lv>S.level?`Lv.${w.lv}`:cur&&cur.id===w.id?`연장 🪙${w.wage}`:`고용 🪙${w.wage}`}</button></div>`).join('')}</div>`);
+  m.querySelectorAll('[data-s]').forEach(b => b.onclick = () => { if (b.dataset.s==='cafe' && !S.cafe.open) return; openStaff(b.dataset.s); });
   m.querySelectorAll('button[data-id]').forEach(b => b.onclick = () => {
-    const w = STAFF.find(x=>x.id===b.dataset.id); if (w.lv > S.level) return;
+    const w = staffList(shop).find(x=>x.id===b.dataset.id); if (w.lv > S.level) return;
     if (S.coins < w.wage){ toast('동전이 부족해요'); SFX.sad(); return; }
-    S.coins -= w.wage; const base = cur && cur.id===w.id ? S.staff.until : Date.now();
-    S.staff = {id:w.id, until: base + SHIFT_MS}; updateHud(); markDirty(); closeModal();
-    if (!staffNpc || staffNpc.W.id !== w.id) spawnStaff();
-    SFX.happy(); toast(`🧑‍🍳 ${w.name}이(가) 일을 시작했어요!`);
+    S.coins -= w.wage; const base = cur && cur.id===w.id ? st.until : Date.now();
+    S[staffKey(shop)] = {id:w.id, until: base + SHIFT_MS}; updateHud(); markDirty(); closeModal();
+    if (!staffNpcs[shop] || staffNpcs[shop].W.id !== w.id) spawnStaff(shop);
+    SFX.happy(); toast(`${shop==='cafe'?'☕':'🧑‍🍳'} ${w.name}이(가) 일을 시작했어요!`);
   });
 }
 $('bStaff').onclick = () => { unlockAudio(); openStaff(); };
 function updateStaff(n, dt){
-  const o = n.obj, W = n.W;
-  if (!staffActive()){ toast(`🧑‍🍳 ${W.name}의 근무가 끝났어요. 수고했어요!`); if (n.job) n.job.claimed = null; removeNpc(n); staffNpc = null; $('staffT').textContent = '알바'; return false; }
+  const o = n.obj, W = n.W, shop = n.shop;
+  if (!staffActive(shop)){ toast(`${shop==='cafe'?'☕':'🧑‍🍳'} ${W.name}의 근무가 끝났어요. 수고했어요!`); if (n.job) n.job.claimed = null; n.bubble?.remove(); removeNpc(n); staffNpcs[shop] = null; return false; }
   const goTo = (x, z) => { const dx = x-o.position.x, dz = z-o.position.z, d = Math.hypot(dx,dz); if (d < .1) return true; const st = Math.min(d, W.speed*dt); o.position.x += dx/d*st; o.position.z += dz/d*st; o.rotation.y = Math.atan2(dx,dz); return false; };
   let moving = false;
   if (n.job && (n.job.state !== 'wait' || !npcs.includes(n.job))){ n.job = null; n.state = 'idle'; n.bubble?.remove(); n.bubble = null; o.userData.hand.clear(); }
   if (n.state==='idle'){
-    const c = customers().filter(c=>c.state==='wait' && !c.claimed && c.shop!=='cafe').sort((a,b)=>a.patience-b.patience)[0];
-    if (c){ c.claimed = n; n.job = c; n.state = 'toOven'; }
-    else moving = !goTo(2.6, -4.4);
+    const c = customers().filter(c=>c.state==='wait' && !c.claimed && (shop==='cafe') === (c.shop==='cafe')).sort((a,b)=>a.patience-b.patience)[0];
+    if (c){ c.claimed = n; n.job = c; n.state = shop==='cafe' ? 'toBar' : 'toOven'; }
+    else moving = !goTo(...STAFF_HOME[shop]);
   }
-  if (n.state==='toOven'){ moving = !goTo(OVEN_STAND[0], OVEN_STAND[1]); if (!moving){ n.state = 'baking'; n.wait = W.bake; o.rotation.y = Math.atan2(oven.position.x-o.position.x, oven.position.z-o.position.z); n.bubble = mkLabel('bubble say', '🔥 굽는 중'); } }
-  else if (n.state==='baking'){ n.wait -= dt; if (n.wait <= 0){ n.bread = {type:n.job.order.type, done: Math.random()<W.perfect ? 'perfect' : 'good', tops:[]};
-      o.userData.hand.clear(); o.userData.hand.add(makeBread(n.bread.type, n.bread.done));
-      n.state = n.job.order.tops.length ? 'toDeco' : 'toCounter'; n.bubble?.remove(); n.bubble = null; } }
-  else if (n.state==='toDeco'){ moving = !goTo(DECO_STAND[0], DECO_STAND[1]); if (!moving){ n.state = 'decorating'; n.wait = W.bake*.5; n.bubble = mkLabel('bubble say', '🎨 장식 중'); } }
-  else if (n.state==='decorating'){ n.wait -= dt; if (n.wait <= 0){ n.bread.tops = [...n.job.order.tops]; o.userData.hand.clear(); o.userData.hand.add(makeBread(n.bread.type, n.bread.done, n.bread.tops)); n.state='toCounter'; n.bubble?.remove(); n.bubble = null; } }
-  else if (n.state==='toCounter'){ moving = !goTo(Math.max(-1.6, Math.min(1.6, n.job.obj.position.x)), -4.0); if (!moving){ o.userData.hand.clear(); sellTo(n.job, n.bread, n); n.job = null; n.state = 'idle'; } }
+  if (shop==='cafe'){
+    if (n.state==='toBar'){ moving = !goTo(BAR_STAND[0]+.6, BAR_STAND[1]); if (!moving){ n.state = 'pouring'; n.wait = W.bake; o.rotation.y = Math.PI; n.bubble = mkLabel('bubble say', '☕ 만드는 중'); } }
+    else if (n.state==='pouring'){ n.wait -= dt; if (n.wait <= 0){ const q = Math.random()<W.perfect ? 'perfect' : 'good';
+        n.drink = {kind:'drink', type:n.job.order.drink, ice:n.job.order.ice, q, home:[]}; o.userData.hand.clear(); o.userData.hand.add(makeDrink(n.drink.type, n.drink.ice, q));
+        n.state = 'toCafeCounter'; n.bubble?.remove(); n.bubble = null; } }
+    else if (n.state==='toCafeCounter'){ moving = !goTo(Math.max(CAFE.x-1.2, Math.min(CAFE.x+1.2, n.job.obj.position.x)), CAFE.z+1.0); if (!moving){ o.userData.hand.clear(); sellDrink(n.job, n.drink, n); n.job = null; n.state = 'idle'; } }
+  } else {
+    if (n.state==='toOven'){ moving = !goTo(OVEN_STAND[0], OVEN_STAND[1]); if (!moving){ n.state = 'baking'; n.wait = W.bake; o.rotation.y = Math.atan2(oven.position.x-o.position.x, oven.position.z-o.position.z); n.bubble = mkLabel('bubble say', '🔥 굽는 중'); } }
+    else if (n.state==='baking'){ n.wait -= dt; if (n.wait <= 0){ n.bread = {type:n.job.order.type, done: Math.random()<W.perfect ? 'perfect' : 'good', tops:[]};
+        o.userData.hand.clear(); o.userData.hand.add(makeBread(n.bread.type, n.bread.done));
+        n.state = n.job.order.tops.length ? 'toDeco' : 'toCounter'; n.bubble?.remove(); n.bubble = null; } }
+    else if (n.state==='toDeco'){ moving = !goTo(DECO_STAND[0], DECO_STAND[1]); if (!moving){ n.state = 'decorating'; n.wait = W.bake*.5; n.bubble = mkLabel('bubble say', '🎨 장식 중'); } }
+    else if (n.state==='decorating'){ n.wait -= dt; if (n.wait <= 0){ n.bread.tops = [...n.job.order.tops]; o.userData.hand.clear(); o.userData.hand.add(makeBread(n.bread.type, n.bread.done, n.bread.tops)); n.state='toCounter'; n.bubble?.remove(); n.bubble = null; } }
+    else if (n.state==='toCounter'){ moving = !goTo(Math.max(-1.6, Math.min(1.6, n.job.obj.position.x)), -4.0); if (!moving){ o.userData.hand.clear(); sellTo(n.job, n.bread, n); n.job = null; n.state = 'idle'; } }
+  }
   if (n.bubble) placeLabel(n.bubble, o, 2.9);
   placeLabel(n.label, o, 2.5);
   animateAnimal(o, moving, dt);
@@ -1496,8 +1524,9 @@ function tick(now){
   else actionBtn.classList.remove('show');
   // 텃밭 성장, 알바 남은 시간
   gardenT -= dt; if (gardenT <= 0){ gardenT = 2; buildGarden(viewData);
-    const sa = staffActive(); $('staffT').textContent = sa ? `${Math.ceil((S.staff.until-Date.now())/60000)}분 남음` : '알바';
-    if (sa && !staffNpc && mode==='home') spawnStaff(); }
+    const ab = staffActive('bakery'), ac = staffActive('cafe'), cnt = (ab?1:0)+(ac?1:0);
+    $('staffT').textContent = cnt ? `${cnt}명 근무` : '알바';
+    if (mode==='home'){ if (ab && !staffNpcs.bakery) spawnStaff('bakery'); if (ac && !staffNpcs.cafe && S.cafe.open) spawnStaff('cafe'); } }
   roomDecoGroup.traverse(o => { if (o.userData.fish !== undefined){ const t = now/1000 + o.userData.fish*2; o.position.x = Math.sin(t)*.32; o.rotation.y = Math.cos(t) > 0 ? 0 : Math.PI; }
     if (o.userData.fire !== undefined) o.scale.y = 1 + Math.sin(now/90 + o.userData.fire*2)*.2; });
   plots.forEach(g => g.traverse(o => { if (o.userData.ripe) o.position.y = .12 + Math.abs(Math.sin(now/400))*.04; }));
@@ -1625,7 +1654,7 @@ function createCharacter(prev){
   };
 }
 function enterHome(first){
-  moveTarget = null; area = 'out'; document.body.classList.remove('inside'); staffNpc = null;
+  moveTarget = null; area = 'out'; document.body.classList.remove('inside'); staffNpcs.bakery = staffNpcs.cafe = null;
   mode = 'home'; viewData = S; visitInfo = null; document.body.classList.remove('visiting'); $('visitbar').classList.remove('show');
   P.x = 0; P.z = 1.5; P.rot = Math.PI; holding = holding || null;
   buildVillage(S); buildPlayer(); spawnStaff(); updateHud(); updateSky(); paused = false; spawnT = 2;
@@ -1663,7 +1692,7 @@ async function visit(id){
   closeModal(true);
   if (deco) endDeco();
   for (const c of customers()) removeNpc(c);
-  moveTarget = null; area = 'out'; document.body.classList.remove('inside'); staffNpc = null; mode = 'visit'; viewData = normalize(data.data); viewData.name = data.nickname; visitInfo = {user_id:id, nickname:data.nickname, hearts:data.hearts};
+  moveTarget = null; area = 'out'; document.body.classList.remove('inside'); staffNpcs.bakery = staffNpcs.cafe = null; mode = 'visit'; viewData = normalize(data.data); viewData.name = data.nickname; visitInfo = {user_id:id, nickname:data.nickname, hearts:data.hearts};
   document.body.classList.add('visiting'); $('visitbar').classList.add('show'); $('visitName').textContent = `${data.nickname}의 마을 · 💗${data.hearts}`;
   P.x = 0; P.z = 18; P.rot = Math.PI;
   buildVillage(viewData); buildPlayer(); paused = false; SFX.happy();
@@ -1726,7 +1755,7 @@ $('bMenu').onclick = () => {
   const inn = m.querySelector('#mIn'); if (inn) inn.onclick = () => { closeModal(true); paused = true; showTitle(); };
 };
 
-window.__dbg = { openBar, openCafeSign, serveCafe, spawnCafeCustomer, get zoom(){return camZoom;}, get camYaw(){return camYaw;}, openStaff, get staffNpc(){return staffNpc;}, get area(){return area;}, enterHouse, exitHouse, proj:(k)=>{ const o={oven,decoTable,counter,mailbox}[k]; _v.set(0,1,0); o.localToWorld(_v); _v.project(camera); return [(_v.x+1)/2*innerWidth,(1-_v.y)/2*innerHeight]; }, get S(){return S;}, P, get npcs(){return npcs;}, get holding(){return holding;}, get mode(){return mode;}, spawnCustomer, doAction, openOven, openDeco, startDeco, serve, gainXp };
+window.__dbg = { openBar, openCafeSign, serveCafe, spawnCafeCustomer, get zoom(){return camZoom;}, get camYaw(){return camYaw;}, openStaff, get staffNpcs(){return staffNpcs;}, get area(){return area;}, enterHouse, exitHouse, proj:(k)=>{ const o={oven,decoTable,counter,mailbox}[k]; _v.set(0,1,0); o.localToWorld(_v); _v.project(camera); return [(_v.x+1)/2*innerWidth,(1-_v.y)/2*innerHeight]; }, get S(){return S;}, P, get npcs(){return npcs;}, get holding(){return holding;}, get mode(){return mode;}, spawnCustomer, doAction, openOven, openDeco, startDeco, serve, gainXp };
 requestAnimationFrame(tick);
 camera.position.set(0, 14, 16); camera.lookAt(0,1,0);
 updateSky();
