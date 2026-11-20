@@ -47,3 +47,11 @@ begin
   return n;
 end $$;
 grant execute on function public.send_heart(uuid) to authenticated;
+
+-- 테이블 권한 (새 Supabase 프로젝트는 자동으로 열어주지 않아요)
+grant usage on schema public to anon, authenticated;
+grant select on public.villages, public.guestbook to anon, authenticated;
+grant insert, update on public.villages to authenticated;
+grant insert, delete on public.guestbook to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+grant execute on function public.send_heart(uuid) to authenticated;
