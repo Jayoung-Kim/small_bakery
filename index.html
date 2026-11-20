@@ -25,7 +25,7 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:0}
 .sp{flex:1}
 .side{position:fixed;right:12px;top:calc(env(safe-area-inset-top) + 64px);display:flex;flex-direction:column;gap:9px;z-index:5}
 .ibtn{width:54px;height:54px;border-radius:18px;background:var(--paper);box-shadow:var(--shadow);font-size:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
-.ibtn small{font-size:10px;margin-top:3px;color:var(--ink2)}
+.ibtn small{font-size:10px;margin-top:3px;color:var(--ink2);white-space:nowrap;letter-spacing:-.3px}
 .ibtn:active{transform:translateY(3px);box-shadow:0 3px 0 rgba(120,80,40,.18)}
 .ibtn .dot{position:absolute;margin:-30px 0 0 34px;width:12px;height:12px;border-radius:50%;background:var(--red);display:none}
 #action{position:fixed;right:22px;bottom:calc(env(safe-area-inset-bottom) + 26px);width:96px;height:96px;border-radius:50%;background:var(--accent);color:#fff;font-size:20px;box-shadow:0 7px 0 #d9774a;z-index:6;display:none;text-shadow:0 2px 0 rgba(0,0,0,.12);padding:6px;line-height:1.15}
@@ -88,6 +88,11 @@ input:focus,textarea:focus{border-color:var(--accent)}
 .visitbar{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 64px);display:none;gap:8px;z-index:6;align-items:center;background:var(--paper);padding:8px 10px 8px 16px;border-radius:999px;box-shadow:var(--shadow);white-space:nowrap}
 .visitbar.show{display:flex}
 .visitbar button{background:#f3e4cd;border-radius:999px;padding:8px 12px;font-size:15px}
+.roomonly{display:none}.inside:not(.visiting) .roomonly{display:flex}
+.rot{position:fixed;left:14px;bottom:calc(env(safe-area-inset-bottom) + 22px);display:flex;gap:8px;z-index:6}
+.rot button{width:50px;height:50px;border-radius:50%;background:var(--paper);box-shadow:var(--shadow);font-size:22px}
+.rot button:active{transform:translateY(3px)}
+.wp{height:54px;width:100%;border-radius:10px;box-shadow:inset 0 0 0 2px rgba(0,0,0,.06)}
 .visiting .side .homeonly,.visiting .lvl,.visiting #coins{display:none}
 #loading{position:fixed;inset:0;background:#ffe9c7;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font-size:22px}
 #loading .em{font-size:64px;animation:bob 1s ease-in-out infinite}
@@ -95,7 +100,8 @@ input:focus,textarea:focus{border-color:var(--accent)}
 .title-logo{font-size:40px;text-align:center;margin:4px 0 2px;color:#e0784a;text-shadow:0 3px 0 #ffd9a8}
 .gb{background:var(--paper);border-radius:14px;padding:9px 12px;box-shadow:0 3px 0 var(--line);font-size:15px}
 .gb small{color:var(--ink2);display:block;font-size:12px;margin-bottom:2px}
-@media (max-width:520px){.lvl .bar{width:70px}.pill{font-size:14px;padding:6px 11px}}
+@media (max-width:520px){.ibtn{width:48px;height:48px;font-size:21px;border-radius:15px}.side{gap:7px}.ibtn small{font-size:9px}
+.lvl .bar{width:70px}.pill{font-size:14px;padding:6px 11px}}
 </style>
 </head>
 <body>
@@ -113,6 +119,8 @@ input:focus,textarea:focus{border-color:var(--accent)}
   <button class="ibtn homeonly" id="bBag">🎒<small>가방</small></button>
   <button class="ibtn homeonly" id="bDeco">🌷<small>꾸미기</small></button>
   <button class="ibtn" id="bVisit">🏡<small>이웃</small></button>
+  <button class="ibtn homeonly" id="bStaff">🧑‍🍳<small id="staffT">알바</small></button>
+  <button class="ibtn homeonly roomonly" id="bRoom">🎨<small>방꾸미기</small></button>
   <button class="ibtn homeonly" id="bMail">💌<small>편지함</small><span class="dot" id="mailDot"></span></button>
   <button class="ibtn" id="bMenu">⚙️<small>메뉴</small></button>
 </div>
@@ -120,7 +128,8 @@ input:focus,textarea:focus{border-color:var(--accent)}
   <button id="vHeart">💗 하트</button><button id="vNote">✏️ 방명록</button><button id="vHome">🏠 집으로</button></div>
 <div class="decobar" id="decobar"><button id="dRot">🔄 돌리기</button><button id="dBag">🎒 가방</button><button id="dDone">✅ 끝내기</button></div>
 <button id="action"></button>
-<div class="hint" id="hint">가고 싶은 곳을 눌러요 · 오븐·텃밭·집을 누르면 바로 써요</div>
+<div class="hint" id="hint">눌러서 이동 · 끌어서 화면 돌리기 · 오븐·텃밭·집을 누르면 바로 써요</div>
+<div class="rot"><button id="rotL" aria-label="왼쪽으로 돌리기">⟲</button><button id="rotR" aria-label="오른쪽으로 돌리기">⟳</button></div>
 <div id="toast"></div>
 
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"}}</script>
@@ -193,7 +202,36 @@ const ITEMS = {
   standlamp:{name:'스탠드',   em:'💡', price:70,  lv:2, r:.25, room:true},
   clock:   {name:'괘종시계',  em:'🕰️', price:110, lv:3, r:.35, room:true},
   plant:   {name:'큰 화분',   em:'🌿', price:50,  lv:1, r:.35, room:true},
+  vase:    {name:'꽃병 탁자', em:'💐', price:45,  lv:1, r:.3,  room:true},
+  easel:   {name:'그림 이젤', em:'🖼️', price:60,  lv:1, r:.35, room:true},
+  wardrobe:{name:'옷장',      em:'🚪', price:140, lv:2, r:.6,  room:true},
+  kitchen: {name:'부엌 조리대',em:'🍳', price:180, lv:2, r:.7,  room:true},
+  fishtank:{name:'어항',      em:'🐠', price:160, lv:3, r:.5,  room:true},
+  fireplace:{name:'벽난로',   em:'🔥', price:220, lv:3, r:.8,  room:true},
+  piano:   {name:'피아노',    em:'🎹', price:300, lv:4, r:.8,  room:true},
 };
+const WALLPAPERS = [
+  {name:'크림',       base:'#fff4e2', pat:'plain', lv:1},
+  {name:'딸기 줄무늬', base:'#ffe6e6', pat:'stripe', acc:'#ffc4c4', lv:1},
+  {name:'하늘 물방울', base:'#e6f3ff', pat:'dot', acc:'#b9d9ff', lv:1},
+  {name:'민트 체크',   base:'#ebf8e3', pat:'check', acc:'#d2efc2', lv:2},
+  {name:'꽃무늬',     base:'#fff0f5', pat:'flower', acc:'#f5a3b5', lv:2},
+  {name:'통나무 벽',   base:'#d9b48a', pat:'plank', acc:'#c49a6c', lv:3},
+  {name:'밤하늘 별',   base:'#3a4270', pat:'star', acc:'#ffe680', lv:4},
+];
+const FLOORS = [
+  {name:'원목',     base:'#d9a46a', pat:'plank', acc:'#c48f58', lv:1},
+  {name:'밝은 원목', base:'#ecc896', pat:'plank', acc:'#dab07a', lv:1},
+  {name:'체크 타일', base:'#ffffff', pat:'check', acc:'#f4c7c7', lv:2},
+  {name:'폭신 카펫', base:'#cbbbe8', pat:'dot', acc:'#bcaae0', lv:2},
+  {name:'돌 타일',   base:'#ddd6cb', pat:'tile', acc:'#bfb6a8', lv:3},
+];
+const STAFF = [
+  {id:'bosl',  name:'보슬', sp:'rabbit', color:0xf4f1ea, wage:40,  speed:2.6, bake:6,   perfect:.1, lv:1, desc:'느긋하지만 꼼꼼해요'},
+  {id:'danchu',name:'단추', sp:'bear',   color:0xd9b38a, wage:90,  speed:3.4, bake:4,   perfect:.25, lv:2, desc:'성실하고 손이 야무져요'},
+  {id:'byeol', name:'별이', sp:'cat',    color:0x9a9aa6, wage:160, speed:4.4, bake:2.5, perfect:.5, lv:4, desc:'손이 아주 빠른 베테랑'},
+];
+const SHIFT_MS = 10*60*1000;
 const CROPS = {
   wheat:  {name:'밀',       em:'🌾', seed:5,  grow:120, lv:1, hint:'굽는 빵에 쓰면 보너스'},
   berry:  {name:'딸기',     em:'🍓', seed:10, grow:240, lv:1, hint:'딸기 토핑에 쓰면 보너스'},
@@ -246,6 +284,7 @@ scene.background = new THREE.Color(0xcfe9f7);
 scene.fog = new THREE.Fog(0xcfe9f7, 38, 70);
 const camera = new THREE.PerspectiveCamera(42, innerWidth/innerHeight, .1, 200);
 let camZoom = innerWidth < innerHeight ? 1.55 : 1;
+let camYaw = 0, camYawT = 0;
 const hemi = new THREE.HemisphereLight(0xfff6e0, 0x7fae6a, 1.15);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff0d6, 1.5);
@@ -424,6 +463,25 @@ function makeItem(id){
       { const sh = mesh(G.cyl(.22,.35,.4,12,1,true), M(0xfff1c9,{emissive:0xffd36b, emissiveIntensity:.4, side:THREE.DoubleSide}),0,1.55,0); sh.userData.glow=true; g.add(sh); } break;
     case 'clock': g.add(mesh(G.box(.6,1.9,.4), M(0x8a5a3a),0,.95,0)); g.add(mesh(G.cyl(.22,.22,.04,16), M(0xfff6e0),0,1.5,.21).rotateX(Math.PI/2));
       g.add(mesh(G.box(.04,.15,.02), M(0x333333),0,1.55,.24,false)); { const pend = mesh(G.sph(.08,8,6), M(0xffd54f),0,.7,.2,false); pend.userData.swing=true; g.add(pend);} break;
+    case 'vase': g.add(mesh(G.cyl(.3,.3,.05,14), M(0xffffff),0,.6,0)); g.add(mesh(G.cyl(.05,.07,.6,8), M(0xd9a46a),0,.3,0)); g.add(mesh(G.cyl(.08,.12,.28,10), M(0x8fb8e0),0,.77,0));
+      for (let i=0;i<5;i++) g.add(mesh(G.sph(.07,6,4), M([0xf26b7a,0xffd54f,0xffffff,0xf7a6b4,0xb98ad9][i]), Math.cos(i*1.3)*.1, .98+Math.sin(i)*.05, Math.sin(i*1.3)*.1, false)); break;
+    case 'easel': for (const [x,z,rz,rx] of [[-.25,.1,.12,-.1],[.25,.1,-.12,-.1],[0,-.25,0,.25]]){ const l = mesh(G.box(.05,1.5,.05), M(0xb98353),x,.72,z); l.rotation.z=rz; l.rotation.x=rx; g.add(l); }
+      g.add(mesh(G.box(.8,.6,.04), M(0xffffff),0,1.05,.16)); g.add(mesh(G.box(.6,.2,.02), M(0x8fd3f0),0,1.17,.19,false)); g.add(mesh(G.box(.6,.2,.02), M(0x8bc47a),0,.97,.19,false)); g.add(mesh(G.sph(.06,8,6), M(0xffd54f),.18,1.2,.2,false)); break;
+    case 'wardrobe': g.add(mesh(G.box(1.2,2,.6), M(0xc48f58),0,1,0)); g.add(mesh(G.box(.02,1.8,.02), M(0x8a5a3a),0,1,.31,false));
+      for (const x of [-.1,.1]) g.add(mesh(G.sph(.04,6,4), M(0xffd54f),x,1.05,.32,false)); g.add(mesh(G.box(1.3,.1,.66), M(0xb98353),0,2.03,0)); break;
+    case 'kitchen': g.add(mesh(G.box(1.8,.9,.65), M(0xffffff),0,.45,0)); g.add(mesh(G.box(1.86,.06,.7), M(0xd9a46a),0,.93,0));
+      g.add(mesh(G.cyl(.2,.2,.04,14), M(0xc0c8d0),-.45,.97,0,false)); g.add(mesh(G.cyl(.04,.04,.3,6), M(0xc0c8d0),-.45,1.1,-.22,false));
+      for (const x of [.25,.6]) g.add(mesh(G.cyl(.14,.14,.02,12), M(0x333333),x,.97,0,false)); g.add(mesh(G.cyl(.13,.12,.16,12), M(0xf28a8a),.6,1.06,0));
+      for (const x of [-.6,0,.6]) g.add(mesh(G.box(.5,.02,.02), M(0xdddddd),x,.75,.33,false)); break;
+    case 'fishtank': g.add(mesh(G.box(1,.6,.5), M(0x8a5a3a),0,.3,0)); g.add(mesh(G.box(.95,.6,.45), M(0x9fdcf5,{transparent:true,opacity:.55}),0,.9,0,false));
+      g.add(mesh(G.box(.9,.06,.42), M(0xe8d9a8),0,.63,0,false)); for (let i=0;i<3;i++){ const f = mesh(G.sph(.06,8,6), M([0xff8a3d,0xffd54f,0xff6b8a][i]),0,.8+i*.1,0,false); f.scale.set(1.6,1,.6); f.userData.fish = i; g.add(f); }
+      g.add(mesh(G.cone(.05,.3,5), M(0x5aa36a),.3,.8,.05,false)); break;
+    case 'fireplace': g.add(mesh(G.box(1.7,1.3,.6), M(0xc96a4a),0,.65,0)); g.add(mesh(G.box(1.9,.12,.75), M(0xfff1dc),0,1.36,0));
+      g.add(mesh(G.box(.9,.7,.1), M(0x2a1a14),0,.45,.26,false)); for (let i=0;i<3;i++){ const f = mesh(G.cone(.12,.35,6), M(0xffa53d,{emissive:0xff7a2a, emissiveIntensity:.8}),-.2+i*.2,.3,.28,false); f.userData.fire = i; g.add(f); }
+      g.add(mesh(G.box(.3,.25,.1), M(0x7aa7d9),.5,1.55,0)); break;
+    case 'piano': g.add(mesh(G.box(1.5,1.2,.55), M(0x3a2a2a),0,.6,0)); g.add(mesh(G.box(1.4,.06,.3), M(0xffffff),0,.75,.4,false));
+      for (let i=0;i<9;i++) g.add(mesh(G.box(.06,.04,.16), M(0x111111),-.6+i*.15,.8,.35,false)); g.add(mesh(G.box(1.5,.08,.35), M(0x3a2a2a),0,.72,.4));
+      g.add(mesh(G.box(.9,.08,.35), M(0x3a2a2a),0,.45,1.0)); for (const x of [-.4,.4]) g.add(mesh(G.box(.06,.42,.3), M(0x3a2a2a),x,.21,1.0)); break;
     case 'plant': g.add(mesh(G.cyl(.25,.2,.4,10), M(0xe8e1d6),0,.2,0)); for (let i=0;i<5;i++){ const l = mesh(G.sph(.22,8,6), M(0x5aa36a), Math.cos(i*1.3)*.15,.7+i*.08,Math.sin(i*1.3)*.15); l.scale.set(.6,1.4,.6); l.rotation.z = Math.cos(i)*.5; g.add(l);} break;
   }
   return g;
@@ -522,11 +580,12 @@ const oven = new THREE.Group(); oven.position.set(-5.5,0,-5); world.add(oven);
   oven.add(mesh(G.cyl(.2,.2,1.1,8), M(0x9a5a44),.4,1.9,-.3));
   const mouth = mesh(G.box(.8,.55,.1), M(0x3a2018,{emissive:0xff7a2a, emissiveIntensity:.6}),0,1.25,.96,false); oven.add(mouth); oven.rotation.y = .5;
   colliders.push({x:-5.5,z:-5,r:1.25}); }
-const decoTable = new THREE.Group(); decoTable.position.set(5.5,0,-5); world.add(decoTable);
+const decoTable = new THREE.Group(); decoTable.position.set(-5.5,0,-2.3); world.add(decoTable);
 { decoTable.add(mesh(G.box(2,.9,1.2), M(0xcf9a66),0,.45,0)); decoTable.add(mesh(G.box(2.2,.1,1.4), M(0xfff6ea),0,.95,0));
   const cols = [0xf0524f,0x6b3d26,0xffffff,0x4b5bc4];
   cols.forEach((c,i)=>{ decoTable.add(mesh(G.cyl(.15,.12,.22,10), M(0xffffff),-.75+i*.5,1.11,-.25)); decoTable.add(mesh(G.sph(.12,8,6), M(c),-.75+i*.5,1.22,-.25)); });
-  decoTable.rotation.y = -.5; colliders.push({x:5.5,z:-5,r:1.25}); }
+  decoTable.rotation.y = -Math.PI/2; colliders.push({x:-5.5,z:-2.8,r:.8},{x:-5.5,z:-1.8,r:.8}); }
+const OVEN_STAND = [-3.9,-4.4], DECO_STAND = [-4.0,-2.3];
 // 우체통 (편지함)
 const mailbox = new THREE.Group(); mailbox.position.set(-3,0,1.8); world.add(mailbox);
 { mailbox.add(mesh(G.cyl(.07,.07,1,6), M(0x8b5e3c),0,.5,0)); const mb = mesh(G.box(.5,.42,.7), M(0xf26b6b),0,1.15,0); mailbox.add(mb);
@@ -559,15 +618,37 @@ for (let i=0;i<9;i++){ const g = new THREE.Group(); const [x,z] = plotPos(i); g.
   const back = mesh(new THREE.PlaneGeometry(60,60), M(0xf3e2c4),0,-.06,0,false); back.rotation.x = -Math.PI/2; roomGroup.add(back);
 }
 let roomShell = null;
+const texCache = new Map();
+function patTex(def, rx, ry){
+  const key = def.name+rx+ry; if (texCache.has(key)) return texCache.get(key);
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+  x.fillStyle = def.base; x.fillRect(0,0,128,128); x.fillStyle = def.acc || def.base; x.strokeStyle = def.acc || def.base;
+  if (def.pat==='stripe') for (let i=0;i<128;i+=32) x.fillRect(i,0,14,128);
+  if (def.pat==='dot') for (let i=0;i<4;i++) for (let j=0;j<4;j++){ x.beginPath(); x.arc(16+i*32+(j%2)*16,16+j*32,6,0,7); x.fill(); }
+  if (def.pat==='check') for (let i=0;i<4;i++) for (let j=0;j<4;j++) if ((i+j)%2) x.fillRect(i*32,j*32,32,32);
+  if (def.pat==='flower') for (let i=0;i<3;i++) for (let j=0;j<3;j++){ const cx=22+i*42+(j%2)*20, cy=22+j*42; for (let k=0;k<5;k++){ x.beginPath(); x.arc(cx+Math.cos(k*1.26)*6, cy+Math.sin(k*1.26)*6, 4.5, 0, 7); x.fill(); } x.fillStyle='#ffe680'; x.beginPath(); x.arc(cx,cy,3,0,7); x.fill(); x.fillStyle=def.acc; }
+  if (def.pat==='plank'){ x.lineWidth = 3; for (let i=0;i<=128;i+=32){ x.beginPath(); x.moveTo(i,0); x.lineTo(i,128); x.stroke(); } for (let i=0;i<4;i++){ x.beginPath(); x.moveTo(i*32, (i*47)%128); x.lineTo(i*32+32,(i*47)%128); x.stroke(); } }
+  if (def.pat==='tile'){ x.lineWidth = 4; for (let i=0;i<=128;i+=64){ x.beginPath(); x.moveTo(i,0); x.lineTo(i,128); x.stroke(); x.beginPath(); x.moveTo(0,i); x.lineTo(128,i); x.stroke(); } }
+  if (def.pat==='star') for (let i=0;i<9;i++){ const sx=(i*53)%128, sy=(i*37+11)%128; x.beginPath(); for (let k=0;k<10;k++){ const r = k%2?2.5:6, a = k*Math.PI/5-Math.PI/2; x.lineTo(sx+Math.cos(a)*r, sy+Math.sin(a)*r); } x.fill(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(rx, ry); texCache.set(key, t); return t;
+}
+const roomWalls = [];
 function buildRoomShell(d){
   if (roomShell) roomGroup.remove(roomShell);
-  const g = new THREE.Group(), hs = roomHalf(d), wallM = M(d.house.wall), trim = M(shade(d.house.roof,-.05));
-  const floor = mesh(G.box(hs*2,.1,hs*2), M(0xd9a46a),0,-.05,0,false); floor.receiveShadow = true; g.add(floor);
-  for (let i=0;i<Math.round(hs*2/0.9);i++) g.add(mesh(G.box(.02,.005,hs*2), M(0xc48f58),-hs+.45+i*.9,.001,0,false));
-  g.add(mesh(G.box(hs*2+.4,3,.2), wallM,0,1.5,-hs-.1)); g.add(mesh(G.box(.2,3,hs*2), wallM,-hs-.1,1.5,0)); g.add(mesh(G.box(.2,3,hs*2), wallM,hs+.1,1.5,0));
-  g.add(mesh(G.box(hs*2+.4,.25,.24), trim,0,.12,-hs-.1,false)); 
-  const win = mesh(G.box(1.6,1.1,.05), M(0xbfe6ff,{emissive:0xffd77a, emissiveIntensity:0}),hs*.4,1.8,-hs+.01,false); win.userData.window = true; g.add(win);
-  g.add(mesh(G.box(1.75,.1,.12), trim,hs*.4,1.22,-hs+.04,false));
+  const g = new THREE.Group(), hs = roomHalf(d), trim = M(shade(d.house.roof,-.05));
+  const wpDef = WALLPAPERS[d.house.wp||0] || WALLPAPERS[0], flDef = FLOORS[d.house.fl||0] || FLOORS[0];
+  const wallM = new THREE.MeshToonMaterial({gradientMap:grad, map:patTex(wpDef, hs*2/1.6, 3/1.6)});
+  const floorM = new THREE.MeshToonMaterial({gradientMap:grad, map:patTex(flDef, hs*2/1.8, hs*2/1.8)});
+  const floor = mesh(G.box(hs*2,.1,hs*2), floorM,0,-.05,0,false); floor.receiveShadow = true; g.add(floor);
+  roomWalls.length = 0;
+  const mkWall = (nx, nz) => { const w = new THREE.Group(); w.userData.n = [nx, nz]; g.add(w); roomWalls.push(w); return w; };
+  const back = mkWall(0,-1), left = mkWall(-1,0), right = mkWall(1,0), front = mkWall(0,1);
+  back.add(mesh(G.box(hs*2+.4,3,.2), wallM,0,1.5,-hs-.1)); left.add(mesh(G.box(.2,3,hs*2), wallM,-hs-.1,1.5,0)); right.add(mesh(G.box(.2,3,hs*2), wallM,hs+.1,1.5,0));
+  const seg = hs - .9; for (const sx of [-1,1]) front.add(mesh(G.box(seg,3,.2), wallM, sx*(.9+seg/2),1.5,hs+.1)); front.add(mesh(G.box(1.8,.8,.2), wallM,0,2.6,hs+.1));
+  back.add(mesh(G.box(hs*2+.4,.25,.24), trim,0,.12,-hs-.1,false)); left.add(mesh(G.box(.24,.25,hs*2), trim,-hs-.1,.12,0,false)); right.add(mesh(G.box(.24,.25,hs*2), trim,hs+.1,.12,0,false));
+  const win = mesh(G.box(1.6,1.1,.05), M(0xbfe6ff,{emissive:0xffd77a, emissiveIntensity:0}),hs*.4,1.8,-hs+.01,false); win.userData.window = true; back.add(win);
+  back.add(mesh(G.box(1.75,.1,.12), trim,hs*.4,1.22,-hs+.04,false));
+  const win2 = mesh(G.box(.05,1.1,1.4), M(0xbfe6ff,{emissive:0xffd77a, emissiveIntensity:0}),-hs+.01,1.8,-hs*.3,false); win2.userData.window = true; left.add(win2);
   g.add(mesh(G.box(1.6,.06,.7), M(0xf6a8b8),0,.03,hs-.2,false)); // 현관 매트
   const lamp = new THREE.PointLight(0xffe2b0, 1.2, hs*4, 1.5); lamp.position.set(0,2.6,0); g.add(lamp);
   roomShell = g; roomGroup.add(g);
@@ -656,6 +737,7 @@ const keys = {};
 const joyV = {x:0, y:0};
 const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
 document.body.classList.add(isTouch ? 'touch' : 'no-touch');
+if (isTouch) document.getElementById('hint').textContent = '눌러서 이동 · 끌어서 화면 돌리기';
 addEventListener('keydown', e => {
   if (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA') return;
   keys[e.code] = true;
@@ -671,11 +753,22 @@ addEventListener('wheel', e => { camZoom = Math.max(.65, Math.min(1.9, camZoom +
 // 핀치 줌 + 꾸미기 탭 위치
 const pts = new Map(); let pinch0 = 0, zoom0 = 1;
 let tapStart = null;
-renderer.domElement.addEventListener('pointerdown', e => { unlockAudio(); pts.set(e.pointerId, e); if (pts.size===2){ const [a,b]=[...pts.values()]; pinch0 = Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY); zoom0 = camZoom; tapStart = null; }
-  else { tapStart = {x:e.clientX, y:e.clientY, t:performance.now()}; if (deco && deco.item) placeGhostAtScreen(e.clientX, e.clientY); } });
+let dragX = null, twist0 = 0, yaw0 = 0;
+const twistAng = () => { const [a,b]=[...pts.values()]; return Math.atan2(b.clientY-a.clientY, b.clientX-a.clientX); };
+renderer.domElement.addEventListener('pointerdown', e => { unlockAudio(); pts.set(e.pointerId, e); if (pts.size===2){ const [a,b]=[...pts.values()]; pinch0 = Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY); zoom0 = camZoom; tapStart = null; twist0 = twistAng(); yaw0 = camYawT; dragX = null; }
+  else { tapStart = {x:e.clientX, y:e.clientY, t:performance.now()}; dragX = null; if (deco && deco.item) placeGhostAtScreen(e.clientX, e.clientY); } });
 renderer.domElement.addEventListener('pointermove', e => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, e);
-  if (pts.size===2 && pinch0){ const [a,b]=[...pts.values()]; camZoom = Math.max(.65, Math.min(1.9, zoom0 * pinch0 / Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY))); }
-  else if (deco && deco.item && pts.size===1) placeGhostAtScreen(e.clientX, e.clientY); });
+  if (pts.size===2 && pinch0){ const [a,b]=[...pts.values()]; camZoom = Math.max(.65, Math.min(1.9, zoom0 * pinch0 / Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)));
+    let da = twistAng() - twist0; da = Math.atan2(Math.sin(da), Math.cos(da)); camYawT = camYaw = yaw0 - da; }
+  else if (deco && deco.item && pts.size===1) placeGhostAtScreen(e.clientX, e.clientY);
+  else if (pts.size===1){
+    if (dragX === null && tapStart && Math.abs(e.clientX-tapStart.x) > 14) dragX = e.clientX;
+    if (dragX !== null){ camYawT -= (e.clientX - dragX) * .008; camYaw = camYawT; dragX = e.clientX; tapStart = null; } } });
+let rotHold = 0;
+for (const [id, dir] of [['rotL',1],['rotR',-1]]){ const b = document.getElementById(id);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); rotHold = dir; camYawT += dir*Math.PI/4; });
+  const up = () => { rotHold = 0; }; b.addEventListener('pointerup', up); b.addEventListener('pointerleave', up); b.addEventListener('pointercancel', up); }
+addEventListener('keydown', e => { if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return; if (e.code==='KeyQ') camYawT += Math.PI/4; if (e.code==='KeyZ') camYawT -= Math.PI/4; });
 const ptEnd = e => {
   if (e.type==='pointerup' && tapStart && pts.size===1 && Math.hypot(e.clientX-tapStart.x, e.clientY-tapStart.y) < 14 && !(deco && deco.item)) onTap(e.clientX, e.clientY);
   if (pts.size<=1) tapStart = null;
@@ -692,8 +785,8 @@ function tapTargets(){
   if (!deco) list.push({o:myHouseGroup, x:MYHOUSE.x, z:MYHOUSE.z+2.6, r:2.2, h:1.4});
   if (mode==='home' && !deco) plots.forEach((g,i) => { if (g.visible) list.push({o:g, x:g.position.x, z:g.position.z+.75, r:.75, h:.3, plot:i}); });
   if (mode==='home' && !deco){
-    list.push({o:oven, x:-4.1, z:-3.7, r:1.6});
-    list.push({o:decoTable, x:4.1, z:-3.7, r:1.6});
+    list.push({o:oven, x:OVEN_STAND[0], z:OVEN_STAND[1], r:1.4});
+    list.push({o:decoTable, x:DECO_STAND[0], z:DECO_STAND[1], r:1.4});
     list.push({o:counter, x:0, z:-2, r:2.3, h:1});
     list.push({o:mailbox, x:-3, z:3, r:1});
   } else if (mode==='visit') list.push({o:mailbox, x:-3, z:3, r:1});
@@ -820,8 +913,12 @@ function customerLeave(n, happy){
 function serve(){
   const cs = customers().filter(c=>c.state==='wait').sort((a,b)=>a.slot-b.slot);
   if (!cs.length){ toast('기다리는 손님이 없어요'); return; }
-  const n = cs.find(c=>c.order.type===holding.type);
+  const n = cs.filter(c=>!c.claimed).find(c=>c.order.type===holding.type) || cs.find(c=>c.order.type===holding.type);
   if (!n){ say(cs[0], `음… 저는 ${BREADS[cs[0].order.type].name}을(를) 주문했어요!`); SFX.sad(); return; }
+  const h = holding; holding = null; refreshHeld();
+  sellTo(n, h, null);
+}
+function sellTo(n, holding, worker){
   const exact = n.order.tops.join()===[...holding.tops].sort().join();
   const mult = {perfect:1.5, good:1, raw:.6, burnt:.6}[holding.done] * (exact?1:.7);
   const price = Math.round((BREADS[holding.type].price + 4*n.order.tops.length) * mult);
@@ -834,9 +931,8 @@ function serve(){
     holding.done==='good' ? ['맛있어 보여! 고마워~', '딱 내가 원하던 거야!'] : ['음… 그래도 고마워!', '조금 아쉽지만 잘 먹을게'];
   say(n, lines[Math.floor(Math.random()*lines.length)]);
   const b = makeBread(holding.type, holding.done, holding.tops); n.obj.userData.hand.add(b);
-  const xp = exact ? (holding.done==='perfect'?10:holding.done==='good'?8:5) : 5;
-  holding = null; refreshHeld();
-  SFX.coin(); toast(`🪙 +${price}${bonus?` (+${bonus} 직접 키운 재료)`:''}  ·  ${n.A.name} 💗+${fr}`);
+  let xp = exact ? (holding.done==='perfect'?10:holding.done==='good'?8:5) : 5; if (worker) xp = Math.ceil(xp/2);
+  SFX.coin(); toast(`${worker?`🧑‍🍳 ${worker.W.name}이(가) 팔았어요 · `:''}🪙 +${price}${bonus?` (+${bonus} 직접 키운 재료)`:''}  ·  ${n.A.name} 💗+${fr}`);
   gainXp(xp);
   addFriend(n.A, fr);
   customerLeave(n, true); markDirty(); updateHud();
@@ -1030,11 +1126,11 @@ function harvest(i){
 
 /* ================= 내 집 ================= */
 function enterHouse(){
-  area = 'in'; moveTarget = null; const hs = roomHalf(viewData);
-  P.x = ROOM.x; P.z = ROOM.z + hs - .6; P.rot = Math.PI; camera.position.set(P.x, 10, P.z + 10); SFX.pop();
+  area = 'in'; document.body.classList.add('inside'); moveTarget = null; const hs = roomHalf(viewData);
+  P.x = ROOM.x; P.z = ROOM.z + hs - .6; P.rot = Math.PI; camera.position.set(P.x + Math.sin(camYaw)*9, 10, P.z + Math.cos(camYaw)*9); SFX.pop();
   toast(mode==='home' ? '🏠 우리 집이에요. 가구를 사서 🌷꾸미기로 놓아봐요' : `🏠 ${viewData.name}의 집에 들어왔어요`);
 }
-function exitHouse(){ if (deco) endDeco(); area = 'out'; moveTarget = null; P.x = MYHOUSE.x; P.z = MYHOUSE.z + 2.8; P.rot = 0; camera.position.set(P.x, 13, P.z + 12); SFX.pop(); }
+function exitHouse(){ if (deco) endDeco(); area = 'out'; document.body.classList.remove('inside'); moveTarget = null; P.x = MYHOUSE.x; P.z = MYHOUSE.z + 2.8; P.rot = 0; camera.position.set(P.x + Math.sin(camYaw)*12, 13, P.z + Math.cos(camYaw)*12); SFX.pop(); }
 function openHouseMenu(){
   const h = S.house, next = HOUSE_COST[h.stage+1];
   const sw = (arr, key) => arr.map(c => `<button class="sw ${h[key]===c?'on':''}" data-${key}="${c}" style="background:#${c.toString(16).padStart(6,'0')}"></button>`).join('');
@@ -1051,6 +1147,71 @@ function openHouseMenu(){
     S.coins -= next.coins; h.stage++; buildMyHouse(S); buildRoom(S); updateHud(); markDirty(); closeModal();
     SFX.lvl(); letter('집을 넓혔어요!', `<span style="font-size:42px">🏡</span><br>${['','','아담한 집','현관 달린 2층 집'][h.stage]}이 됐어요.<br>방도 넓어져서 가구를 더 놓을 수 있어요!`);
   };
+}
+
+function openRoomMenu(){
+  const h = S.house;
+  const sw = (def) => def.pat==='plain' ? def.base : def.pat==='stripe' ? `repeating-linear-gradient(90deg,${def.base} 0 10px,${def.acc} 10px 18px)` :
+    def.pat==='check' ? `repeating-conic-gradient(${def.acc} 0 25%, ${def.base} 0 50%) 0 0/20px 20px` : def.pat==='plank' ? `repeating-linear-gradient(90deg,${def.base} 0 14px,${def.acc} 14px 16px)` :
+    def.pat==='tile' ? `repeating-linear-gradient(0deg,${def.acc} 0 2px,transparent 2px 22px),repeating-linear-gradient(90deg,${def.acc} 0 2px,${def.base} 2px 22px)` :
+    `radial-gradient(${def.acc} 22%, transparent 26%) 0 0/14px 14px, ${def.base}`;
+  const grid = (arr, key) => arr.map((d,i) => `<button class="card ${h[key]===i?'on':''} ${d.lv>S.level?'lock':''}" data-${key}="${i}" ${d.lv>S.level?'disabled':''}><div class="wp" style="background:${sw(d)}"></div>${d.name}<small>${d.lv>S.level?`Lv.${d.lv}`:'&nbsp;'}</small></button>`).join('');
+  const m = openModal(`<h2>🎨 방 꾸미기</h2><p class="sub">벽지와 바닥을 골라요. 가구는 🛍️상점의 가구 탭에서 사서 🌷꾸미기로 놓아요</p>
+    <h3 style="font-weight:400;margin:4px 0 8px">벽지</h3><div class="grid">${grid(WALLPAPERS,'wp')}</div>
+    <h3 style="font-weight:400;margin:14px 0 8px">바닥</h3><div class="grid">${grid(FLOORS,'fl')}</div>`);
+  m.querySelectorAll('[data-wp]').forEach(b => b.onclick = () => { h.wp = +b.dataset.wp; buildRoom(S); markDirty(); SFX.pop(); openRoomMenu(); });
+  m.querySelectorAll('[data-fl]').forEach(b => b.onclick = () => { h.fl = +b.dataset.fl; buildRoom(S); markDirty(); SFX.pop(); openRoomMenu(); });
+}
+$('bRoom').onclick = () => { unlockAudio(); openRoomMenu(); };
+
+/* ================= 알바생 ================= */
+let staffNpc = null;
+const staffActive = () => S.staff && S.staff.until > Date.now() && STAFF.find(x=>x.id===S.staff.id);
+function spawnStaff(){
+  if (staffNpc){ removeNpc(staffNpc); staffNpc = null; }
+  const W = staffActive(); if (!W || mode!=='home') return;
+  const o = makeAnimal(W.sp, W.color, {baker:true}); o.position.set(2.6,0,-4.4); world.add(o);
+  staffNpc = {obj:o, kind:'staff', W, state:'idle', job:null, wait:0, label:mkLabel('nametag', '알바 '+W.name)};
+  npcs.push(staffNpc);
+}
+function openStaff(){
+  const cur = staffActive(), left = cur ? Math.ceil((S.staff.until-Date.now())/60000) : 0;
+  const m = openModal(`<h2>🧑‍🍳 알바생 구하기</h2><p class="sub">고용하면 10분 동안 손님 주문을 대신 굽고 팔아줘요.<br>게임을 켜 둔 동안 일하고, 판매 금액은 모두 빵집 몫이에요.</p>
+    ${cur ? `<div class="gb" style="text-align:center;margin-bottom:10px">지금 <b>${cur.name}</b>이(가) 일하는 중 · ${left}분 남음</div>` : ''}
+    <div class="list">${STAFF.map(w => `<div class="li"><div style="font-size:30px">${{rabbit:'🐰',bear:'🐻',cat:'🐱'}[w.sp]}</div><div class="grow"><div>${w.name} <small>${SPECIES[w.sp]}</small></div><small>${w.desc} · 속도 ${'★'.repeat(Math.round(w.speed-1.5))} · 완벽한 빵 ${Math.round(w.perfect*100)}%</small></div>
+      <button data-id="${w.id}" ${w.lv>S.level?'disabled style="opacity:.5"':''}>${w.lv>S.level?`Lv.${w.lv}`:cur&&cur.id===w.id?`10분 연장 🪙${w.wage}`:`고용 🪙${w.wage}`}</button></div>`).join('')}</div>`);
+  m.querySelectorAll('button[data-id]').forEach(b => b.onclick = () => {
+    const w = STAFF.find(x=>x.id===b.dataset.id); if (w.lv > S.level) return;
+    if (S.coins < w.wage){ toast('동전이 부족해요'); SFX.sad(); return; }
+    S.coins -= w.wage; const base = cur && cur.id===w.id ? S.staff.until : Date.now();
+    S.staff = {id:w.id, until: base + SHIFT_MS}; updateHud(); markDirty(); closeModal();
+    if (!staffNpc || staffNpc.W.id !== w.id) spawnStaff();
+    SFX.happy(); toast(`🧑‍🍳 ${w.name}이(가) 일을 시작했어요!`);
+  });
+}
+$('bStaff').onclick = () => { unlockAudio(); openStaff(); };
+function updateStaff(n, dt){
+  const o = n.obj, W = n.W;
+  if (!staffActive()){ toast(`🧑‍🍳 ${W.name}의 근무가 끝났어요. 수고했어요!`); if (n.job) n.job.claimed = null; removeNpc(n); staffNpc = null; $('staffT').textContent = '알바'; return false; }
+  const goTo = (x, z) => { const dx = x-o.position.x, dz = z-o.position.z, d = Math.hypot(dx,dz); if (d < .1) return true; const st = Math.min(d, W.speed*dt); o.position.x += dx/d*st; o.position.z += dz/d*st; o.rotation.y = Math.atan2(dx,dz); return false; };
+  let moving = false;
+  if (n.job && (n.job.state !== 'wait' || !npcs.includes(n.job))){ n.job = null; n.state = 'idle'; n.bubble?.remove(); n.bubble = null; o.userData.hand.clear(); }
+  if (n.state==='idle'){
+    const c = customers().filter(c=>c.state==='wait' && !c.claimed).sort((a,b)=>a.patience-b.patience)[0];
+    if (c){ c.claimed = n; n.job = c; n.state = 'toOven'; }
+    else moving = !goTo(2.6, -4.4);
+  }
+  if (n.state==='toOven'){ moving = !goTo(OVEN_STAND[0], OVEN_STAND[1]); if (!moving){ n.state = 'baking'; n.wait = W.bake; o.rotation.y = Math.atan2(oven.position.x-o.position.x, oven.position.z-o.position.z); n.bubble = mkLabel('bubble say', '🔥 굽는 중'); } }
+  else if (n.state==='baking'){ n.wait -= dt; if (n.wait <= 0){ n.bread = {type:n.job.order.type, done: Math.random()<W.perfect ? 'perfect' : 'good', tops:[]};
+      o.userData.hand.clear(); o.userData.hand.add(makeBread(n.bread.type, n.bread.done));
+      n.state = n.job.order.tops.length ? 'toDeco' : 'toCounter'; n.bubble?.remove(); n.bubble = null; } }
+  else if (n.state==='toDeco'){ moving = !goTo(DECO_STAND[0], DECO_STAND[1]); if (!moving){ n.state = 'decorating'; n.wait = W.bake*.5; n.bubble = mkLabel('bubble say', '🎨 장식 중'); } }
+  else if (n.state==='decorating'){ n.wait -= dt; if (n.wait <= 0){ n.bread.tops = [...n.job.order.tops]; o.userData.hand.clear(); o.userData.hand.add(makeBread(n.bread.type, n.bread.done, n.bread.tops)); n.state='toCounter'; n.bubble?.remove(); n.bubble = null; } }
+  else if (n.state==='toCounter'){ moving = !goTo(Math.max(-1.6, Math.min(1.6, n.job.obj.position.x)), -4.0); if (!moving){ o.userData.hand.clear(); sellTo(n.job, n.bread, n); n.job = null; n.state = 'idle'; } }
+  if (n.bubble) placeLabel(n.bubble, o, 2.9);
+  placeLabel(n.label, o, 2.5);
+  animateAnimal(o, moving, dt);
+  return true;
 }
 
 /* ================= 행동 ================= */
@@ -1078,8 +1239,9 @@ function computeAction(){
     const r = npcs.find(n=>n.kind==='resident' && d(n.obj, 1.8)); if (r) return {label:'말 걸기', fn:()=>{ say(r, r.A.line); SFX.pop(); }};
     return null;
   }
-  if (d(oven, 2.4)) return {label:holding?'다시 굽기':'굽기', fn:openOven};
-  if (d(decoTable, 2.4)) return {label:'장식', fn:openDeco};
+  { const dO = Math.hypot(P.x-oven.position.x, P.z-oven.position.z), dD = Math.hypot(P.x-decoTable.position.x, P.z-decoTable.position.z);
+    if (dO < 2.4 && dO <= dD) return {label:holding?'다시 굽기':'굽기', fn:openOven};
+    if (dD < 2.4) return {label:'장식', fn:openDeco}; }
   if (holding && Math.hypot(P.x-counter.position.x, P.z-counter.position.z) < 3.2) return {label:'건네기', fn:serve};
   if (d(mailbox, 1.8)) return {label:'편지함', fn:openMail};
   const r = npcs.find(n=>n.kind==='resident' && !n.busy && d(n.obj, 1.8)); if (r) return {label:'말 걸기', fn:()=>{ say(r, `${r.A.line} (💗${S.friends[r.A.id]||0})`); SFX.pop(); }};
@@ -1112,6 +1274,7 @@ function tick(now){
     // 이동
     let ix = (keys.KeyD||keys.ArrowRight?1:0) - (keys.KeyA||keys.ArrowLeft?1:0) + joyV.x;
     let iz = (keys.KeyS||keys.ArrowDown?1:0) - (keys.KeyW||keys.ArrowUp?1:0) + joyV.y;
+    { const sy = Math.sin(camYaw), cy = Math.cos(camYaw), kx = ix, kz = iz; ix = kx*cy + kz*sy; iz = -kx*sy + kz*cy; }
     let il = Math.hypot(ix, iz); if (il > 1){ ix/=il; iz/=il; }
     if (il > .1) moveTarget = null;
     else if (moveTarget){
@@ -1137,6 +1300,7 @@ function tick(now){
   // NPC
   for (const n of [...npcs]){
     const o = n.obj; let moving = false;
+    if (n.kind==='staff'){ if (!paused) updateStaff(n, dt); continue; }
     if (n.kind==='customer'){
       if (n.state==='walk' || n.state==='leave'){
         const dx = n.tx-o.position.x, dz = n.tz-o.position.z, dd = Math.hypot(dx,dz);
@@ -1152,7 +1316,7 @@ function tick(now){
         n.patience -= dt; o.rotation.y = Math.hypot(P.x-o.position.x, P.z-o.position.z) < 7 ? Math.atan2(P.x-o.position.x, P.z-o.position.z) : Math.PI;
         if (n.patience <= 0){ customerLeave(n, false); SFX.sad(); continue; }
       }
-      if (n.bubble){ n.bubble.innerHTML = `${orderHtml(n.order)}<div class="pb"><i style="width:${n.patience/n.maxP*100}%;background:${n.patience/n.maxP<.3?'var(--red)':'var(--green)'}"></i></div>`; placeLabel(n.bubble, o, 2.6); }
+      if (n.bubble){ n.bubble.innerHTML = `${n.claimed?'<small style="font-size:12px">🧑‍🍳</small>':''}${orderHtml(n.order)}<div class="pb"><i style="width:${n.patience/n.maxP*100}%;background:${n.patience/n.maxP<.3?'var(--red)':'var(--green)'}"></i></div>`; placeLabel(n.bubble, o, 2.6); }
     } else if (n.kind==='resident'){
       if (n.busy) { continue; }
       n.wait -= dt;
@@ -1177,14 +1341,22 @@ function tick(now){
   // 행동 버튼
   if (!paused){ const a = computeAction(); currentAction = a; if (a){ actionBtn.textContent = a.label; actionBtn.classList.add('show'); } else actionBtn.classList.remove('show'); }
   else actionBtn.classList.remove('show');
-  // 텃밭 성장
-  gardenT -= dt; if (gardenT <= 0){ gardenT = 2; buildGarden(viewData); }
+  // 텃밭 성장, 알바 남은 시간
+  gardenT -= dt; if (gardenT <= 0){ gardenT = 2; buildGarden(viewData);
+    const sa = staffActive(); $('staffT').textContent = sa ? `${Math.ceil((S.staff.until-Date.now())/60000)}분 남음` : '알바';
+    if (sa && !staffNpc && mode==='home') spawnStaff(); }
+  roomDecoGroup.traverse(o => { if (o.userData.fish !== undefined){ const t = now/1000 + o.userData.fish*2; o.position.x = Math.sin(t)*.32; o.rotation.y = Math.cos(t) > 0 ? 0 : Math.PI; }
+    if (o.userData.fire !== undefined) o.scale.y = 1 + Math.sin(now/90 + o.userData.fire*2)*.2; });
   plots.forEach(g => g.traverse(o => { if (o.userData.ripe) o.position.y = .12 + Math.abs(Math.sin(now/400))*.04; }));
   roomDecoGroup.traverse(o => { if (o.userData.swing) o.position.x = Math.sin(now/500)*.12; });
   // 카메라
   const tx = P.x, tz = P.z, cz = area==='in' ? .72 : camZoom;
-  camera.position.lerp(_v.set(tx, 13*cz, tz + 12.5*cz), Math.min(1, dt*5));
-  camera.lookAt(tx, 1, tz - 1);
+  camYaw += (camYawT - camYaw) * Math.min(1, dt*8);
+  const sy = Math.sin(camYaw), cy = Math.cos(camYaw);
+  camera.position.lerp(_v.set(tx + sy*12.5*cz, 13*cz, tz + cy*12.5*cz), Math.min(1, dt*6));
+  camera.lookAt(tx - sy, 1, tz - cy);
+  if (area==='in'){ const vx = camera.position.x-ROOM.x, vz = camera.position.z-ROOM.z, vl = Math.hypot(vx,vz)||1;
+    for (const w of roomWalls) w.visible = (w.userData.n[0]*vx + w.userData.n[1]*vz)/vl < .35; }
   sun.position.set(tx + 10, 22, tz + 8); sun.target.position.set(tx, 0, tz);
   skyT -= dt; if (skyT <= 0){ updateSky(); skyT = 30; }
   renderer.render(scene, camera);
@@ -1214,7 +1386,7 @@ document.addEventListener('visibilitychange', () => {
 addEventListener('pagehide', () => { markDirty(); saveRemote(true); });
 
 function normalize(d){ const f = freshSave(); d = Object.assign(f, d||{}); d.items ||= {}; d.placed ||= []; d.friends ||= {}; d.residents ||= []; d.gifted ||= {}; d.stats = Object.assign({served:0,perfect:0}, d.stats||{});
-  d.house = Object.assign({stage:1, wall:0xfff4e2, roof:0x7aa7d9}, d.house||{}); d.room ||= []; d.garden ||= [{},{},{},{},{},{}]; d.pantry ||= {};
+  d.house = Object.assign({stage:1, wall:0xfff4e2, roof:0x7aa7d9, wp:0, fl:0}, d.house||{}); d.room ||= []; d.garden ||= [{},{},{},{},{},{}]; d.pantry ||= {};
   return d; }
 
 /* ================= 시작 / 로그인 ================= */
@@ -1300,10 +1472,10 @@ function createCharacter(prev){
   };
 }
 function enterHome(first){
-  moveTarget = null; area = 'out';
+  moveTarget = null; area = 'out'; document.body.classList.remove('inside'); staffNpc = null;
   mode = 'home'; viewData = S; visitInfo = null; document.body.classList.remove('visiting'); $('visitbar').classList.remove('show');
   P.x = 0; P.z = 1.5; P.rot = Math.PI; holding = holding || null;
-  buildVillage(S); buildPlayer(); updateHud(); updateSky(); paused = false; spawnT = 2;
+  buildVillage(S); buildPlayer(); spawnStaff(); updateHud(); updateSky(); paused = false; spawnT = 2;
   try{ localStorage.setItem(localKey(), JSON.stringify(S)); }catch(e){}
   if (first) setTimeout(() => letter('꼬마 빵집에 온 걸 환영해요!', `숲속 동물들이 빵을 사러 올 거예요.<br><br>
     1. 손님 머리 위 <b>주문</b>을 보고<br>2. 왼쪽 <b>🔥오븐</b>에서 빵을 굽고<br>3. 오른쪽 <b>🎨장식대</b>에서 토핑을 올려<br>4. <b>카운터</b>에서 건네주세요!<br><br>
@@ -1338,7 +1510,7 @@ async function visit(id){
   closeModal(true);
   if (deco) endDeco();
   for (const c of customers()) removeNpc(c);
-  moveTarget = null; area = 'out'; mode = 'visit'; viewData = normalize(data.data); viewData.name = data.nickname; visitInfo = {user_id:id, nickname:data.nickname, hearts:data.hearts};
+  moveTarget = null; area = 'out'; document.body.classList.remove('inside'); staffNpc = null; mode = 'visit'; viewData = normalize(data.data); viewData.name = data.nickname; visitInfo = {user_id:id, nickname:data.nickname, hearts:data.hearts};
   document.body.classList.add('visiting'); $('visitbar').classList.add('show'); $('visitName').textContent = `${data.nickname}의 마을 · 💗${data.hearts}`;
   P.x = 0; P.z = 18; P.rot = Math.PI;
   buildVillage(viewData); buildPlayer(); paused = false; SFX.happy();
@@ -1401,7 +1573,7 @@ $('bMenu').onclick = () => {
   const inn = m.querySelector('#mIn'); if (inn) inn.onclick = () => { closeModal(true); paused = true; showTitle(); };
 };
 
-window.__dbg = { get area(){return area;}, enterHouse, exitHouse, proj:(k)=>{ const o={oven,decoTable,counter,mailbox}[k]; _v.set(0,1,0); o.localToWorld(_v); _v.project(camera); return [(_v.x+1)/2*innerWidth,(1-_v.y)/2*innerHeight]; }, get S(){return S;}, P, get npcs(){return npcs;}, get holding(){return holding;}, get mode(){return mode;}, spawnCustomer, doAction, openOven, openDeco, startDeco, serve, gainXp };
+window.__dbg = { get camYaw(){return camYaw;}, openStaff, get staffNpc(){return staffNpc;}, get area(){return area;}, enterHouse, exitHouse, proj:(k)=>{ const o={oven,decoTable,counter,mailbox}[k]; _v.set(0,1,0); o.localToWorld(_v); _v.project(camera); return [(_v.x+1)/2*innerWidth,(1-_v.y)/2*innerHeight]; }, get S(){return S;}, P, get npcs(){return npcs;}, get holding(){return holding;}, get mode(){return mode;}, spawnCustomer, doAction, openOven, openDeco, startDeco, serve, gainXp };
 requestAnimationFrame(tick);
 camera.position.set(0, 14, 16); camera.lookAt(0,1,0);
 updateSky();
